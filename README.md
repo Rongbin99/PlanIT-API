@@ -2,7 +2,7 @@
 
 This [express.js](https://expressjs.com/) backend server responds to API callbacks from the React Native frontend and provides endpoints for trip planning and chat history management.
 
-[![Backend CodeQL Advanced](https://github.com/Rongbin99/PlanIT/actions/workflows/codeql.yml/badge.svg?branch=main-backend)](https://github.com/Rongbin99/PlanIT/actions/workflows/codeql.yml)
+[![CodeQL Advanced](https://github.com/Rongbin99/PlanIT-API/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/Rongbin99/PlanIT-API/actions/workflows/codeql.yml)
 ![GitHub last commit (branch)](https://img.shields.io/github/last-commit/Rongbin99/PlanIT-API/main-backend)
 ![GitHub Release](https://img.shields.io/github/v/release/Rongbin99/PlanIT-API?style=flat)
 
