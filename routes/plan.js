@@ -5,7 +5,6 @@
  * Processes search queries with filters and returns personalized travel recommendations.
  * 
  * @author Rongbin Gu (@rongbin99)
- * @version 1.0.0
  */
 
 // ========================================
