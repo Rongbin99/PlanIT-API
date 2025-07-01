@@ -5,7 +5,6 @@
  * Handles API routes for trip planning and chat management.
  * 
  * @author Rongbin Gu (@rongbin99)
- * @version 1.0.0
  */
 
 // ========================================
@@ -18,15 +17,18 @@ const morgan = require('morgan');
 const compression = require('compression');
 require('dotenv').config();
 
-// Route imports
 const planRoutes = require('./routes/plan');
 const chatRoutes = require('./routes/chat');
 
 // ========================================
 // CONSTANTS & CONFIGURATION
 // ========================================
-const PORT = process.env.PORT || 3000;
-const NODE_ENV = process.env.NODE_ENV || 'development';
+const PORT = process.env.PORT
+const NODE_ENV = process.env.NODE_ENV
+const LIMITS = {
+    MAX_FILE_SIZE: '10mb',
+    MAX_REQUEST_SIZE: '10mb',
+}
 
 // ========================================
 // EXPRESS APP SETUP
@@ -55,16 +57,9 @@ app.use(compression());
 // CORS configuration
 const corsOptions = {
     origin: function (origin, callback) {
-        // Allow requests with no origin (mobile apps, curl, etc.)
         if (!origin) return callback(null, true);
         
-        // List of allowed origins
-        const allowedOrigins = [
-            'http://localhost:3000',
-            'http://localhost:19006', // Expo development server
-            'exp://localhost:19000',  // Expo client
-            // Add your production domains here
-        ];
+        const allowedOrigins = process.env.ALLOWED_ORIGINS.split(',');
         
         if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
@@ -81,8 +76,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: LIMITS.MAX_REQUEST_SIZE }));
+app.use(express.urlencoded({ extended: true, limit: LIMITS.MAX_REQUEST_SIZE }));
 
 // Logging middleware
 if (NODE_ENV === 'development') {
@@ -102,16 +97,118 @@ app.use((req, res, next) => {
 // ROUTES
 // ========================================
 
-// Health check endpoint
-app.get('/health', (req, res) => {
+// Health check endpoint with comprehensive metrics
+app.get('/status', async (req, res) => {
+    const startTime = process.hrtime.bigint();
     console.log('[Server] Health check requested');
-    res.status(200).json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        version: '1.0.0',
-        environment: NODE_ENV
-    });
+    
+    try {
+        // System metrics
+        const memoryUsage = process.memoryUsage();
+        const cpuUsage = process.cpuUsage();
+        const uptime = process.uptime();
+        
+        // Calculate response latency
+        const endTime = process.hrtime.bigint();
+        const latencyMs = Number(endTime - startTime) / 1000000; // Convert nanoseconds to milliseconds
+        
+        // External service checks
+        const serviceChecks = {};
+        
+        // Check OpenAI API connectivity (if API key is configured)
+        if (process.env.OPENAI_API_KEY) {
+            try {
+                const { testConnection } = require('./services/openai');
+                serviceChecks.openai = await testConnection();
+            } catch (error) {
+                serviceChecks.openai = { status: 'error', message: error.message };
+            }
+        } else {
+            serviceChecks.openai = { status: 'not_configured', message: 'API key not set' };
+        }
+        
+        const healthData = {
+            status: 'online',
+            timestamp: new Date().toISOString(),
+            environment: NODE_ENV,
+            server: {
+                uptime: {
+                    seconds: Math.floor(uptime),
+                    formatted: formatUptime(uptime)
+                },
+                latency: {
+                    response_time_ms: parseFloat(latencyMs.toFixed(2)),
+                    status: latencyMs < 100 ? 'excellent' : latencyMs < 500 ? 'good' : 'slow'
+                },
+                memory: {
+                    rss_mb: Math.round(memoryUsage.rss / 1024 / 1024),
+                    heap_used_mb: Math.round(memoryUsage.heapUsed / 1024 / 1024),
+                    heap_total_mb: Math.round(memoryUsage.heapTotal / 1024 / 1024),
+                    external_mb: Math.round(memoryUsage.external / 1024 / 1024),
+                    heap_usage_percent: Math.round((memoryUsage.heapUsed / memoryUsage.heapTotal) * 100)
+                },
+                cpu: {
+                    user_microseconds: cpuUsage.user,
+                    system_microseconds: cpuUsage.system
+                },
+                process: {
+                    pid: process.pid,
+                    node_version: process.version,
+                    platform: process.platform,
+                    arch: process.arch
+                }
+            },
+            api: {
+                endpoints: {
+                    plan: '/api/plan',
+                    chat: '/api/chat',
+                    status: '/status'
+                }
+            },
+            external_services: serviceChecks,
+            cors: {
+                allowed_origins: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').length : 0,
+                configured: !!process.env.ALLOWED_ORIGINS
+            }
+        };
+        
+        res.status(200).json(healthData);
+        
+    } catch (error) {
+        console.error('[Server] Health check error:', error);
+        
+        const endTime = process.hrtime.bigint();
+        const latencyMs = Number(endTime - startTime) / 1000000;
+        
+        res.status(500).json({
+            status: 'offline',
+            timestamp: new Date().toISOString(),
+            environment: NODE_ENV,
+            error: error.message,
+            latency: {
+                response_time_ms: parseFloat(latencyMs.toFixed(2))
+            }
+        });
+    }
 });
+
+// Helper function to format uptime
+function formatUptime(uptimeSeconds) {
+    const days = Math.floor(uptimeSeconds / 86400);
+    const hours = Math.floor((uptimeSeconds % 86400) / 3600);
+    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+    const seconds = Math.floor(uptimeSeconds % 60);
+    
+    if (days > 0) {
+        return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+    } else if (hours > 0) {
+        return `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+        return `${minutes}m ${seconds}s`;
+    } else {
+        return `${seconds}s`;
+    }
+}
 
 // API routes
 app.use('/api/plan', planRoutes);
@@ -122,10 +219,9 @@ app.get('/', (req, res) => {
     console.log('[Server] Root endpoint accessed');
     res.status(200).json({
         message: 'PlanIT Backend API',
-        version: '1.0.0',
         author: 'Rongbin Gu (@rongbin99)',
         endpoints: {
-            health: '/health',
+            status: '/status',
             plan: '/api/plan',
             chat: '/api/chat'
         },
@@ -188,7 +284,7 @@ const server = app.listen(PORT, () => {
     console.log(`Environment: ${NODE_ENV}`);
     console.log(`Port: ${PORT}`);
     console.log(`URL: http://localhost:${PORT}`);
-    console.log(`Health Check: http://localhost:${PORT}/health`);
+    console.log(`Status Check: http://localhost:${PORT}/status`);
     console.log(`API Endpoints:`);
     console.log(`  - Plan: http://localhost:${PORT}/api/plan`);
     console.log(`  - Chat: http://localhost:${PORT}/api/chat`);
