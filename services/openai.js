@@ -5,7 +5,6 @@
  * Processes search queries and filters to generate personalized travel suggestions.
  * 
  * @author Rongbin Gu (@rongbin99)
- * @version 1.0.0
  */
 
 // ========================================
@@ -59,10 +58,10 @@ const AI_CONFIG = {
  * Price range mapping for AI context
  */
 const PRICE_RANGE_MAP = {
-    1: '$ (Budget-friendly, under $15 per person)',
-    2: '$$ (Moderate, $15-30 per person)',
-    3: '$$$ (Upscale, $30-60 per person)',
-    4: '$$$+ (Luxury, $60+ per person)'
+    1: '$ (Budget-friendly, under $20 per person)',
+    2: '$$ (Moderate, $20-30 per person)',
+    3: '$$$ (Upscale, $30-50 per person)',
+    4: '$$$+ (Luxury, $50+ per person)'
 };
 
 // ========================================
