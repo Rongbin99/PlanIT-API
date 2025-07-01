@@ -36,6 +36,13 @@ Install the node dependencies.
 npm install
 ```
 
+Clone the `env.example` file under /config and insert your API keys
+
+```
+OPENAI_API_KEY=
+UNSPLASH_API_KEY=
+```
+
 Finally, run the server on your local machine.
 
 ```
@@ -50,10 +57,10 @@ npm run dev
 http://localhost:3000
 ```
 
-### Health Check
+### Status Check
 
 ```http
-GET /health
+GET /status
 ```
 
 Returns server status and basic information.
