@@ -14,6 +14,13 @@ const express = require('express');
 const Joi = require('joi');
 const { v4: uuidv4 } = require('uuid');
 const { addImagesToTrips } = require('../services/unsplash');
+const { 
+    getTrips, 
+    getTripById, 
+    createTrip, 
+    updateTrip, 
+    deleteTrip 
+} = require('../services/database');
 
 // ========================================
 // ROUTER SETUP

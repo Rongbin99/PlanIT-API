@@ -19,6 +19,7 @@ require('dotenv').config();
 
 const planRoutes = require('./routes/plan');
 const chatRoutes = require('./routes/chat');
+const { initializeDatabase, seedDatabase, testConnection, closeDatabase } = require('./services/database');
 
 // ========================================
 // CONSTANTS & CONFIGURATION
@@ -29,6 +30,7 @@ const LIMITS = {
     MAX_FILE_SIZE: '10mb',
     MAX_REQUEST_SIZE: '10mb',
 }
+const TAG = '[Server]';
 
 // ========================================
 // EXPRESS APP SETUP
@@ -88,8 +90,8 @@ if (NODE_ENV === 'development') {
 
 // Request logging middleware
 app.use((req, res, next) => {
-    console.log(`[Server] ${new Date().toISOString()} - ${req.method} ${req.path}`);
-    console.log(`[Server] Request body:`, req.method !== 'GET' ? req.body : 'N/A');
+    console.log(TAG, `${new Date().toISOString()} - ${req.method} ${req.path}`);
+    console.log(TAG, `Request body:`, req.method !== 'GET' ? req.body : 'N/A');
     next();
 });
 
@@ -100,7 +102,7 @@ app.use((req, res, next) => {
 // Health check endpoint with comprehensive metrics
 app.get('/status', async (req, res) => {
     const startTime = process.hrtime.bigint();
-    console.log('[Server] Health check requested');
+    console.log(TAG, 'Health check requested');
     
     try {
         // System metrics
@@ -137,6 +139,13 @@ app.get('/status', async (req, res) => {
             }
         } else {
             serviceChecks.unsplash = { status: 'not_configured', message: 'API key not set' };
+        }
+        
+        // Check PostgreSQL database connectivity
+        try {
+            serviceChecks.database = await testConnection();
+        } catch (error) {
+            serviceChecks.database = { status: 'error', message: error.message };
         }
         
         const healthData = {
@@ -187,7 +196,7 @@ app.get('/status', async (req, res) => {
         res.status(200).json(healthData);
         
     } catch (error) {
-        console.error('[Server] Health check error:', error);
+        console.error(TAG, 'Health check error:', error);
         
         const endTime = process.hrtime.bigint();
         const latencyMs = Number(endTime - startTime) / 1000000;
@@ -228,7 +237,7 @@ app.use('/api/chat', chatRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
-    console.log('[Server] Root endpoint accessed');
+    console.log(TAG, 'Root endpoint accessed');
     res.status(200).json({
         message: 'PlanIT Backend API',
         author: 'Rongbin Gu (@rongbin99)',
@@ -247,7 +256,7 @@ app.get('/', (req, res) => {
 
 // 404 handler
 app.use('*', (req, res) => {
-    console.warn(`[Server] 404 - Route not found: ${req.method} ${req.originalUrl}`);
+    console.warn(TAG, `404 - Route not found: ${req.method} ${req.originalUrl}`);
     res.status(404).json({
         error: 'Route not found',
         message: `The endpoint ${req.method} ${req.originalUrl} does not exist`,
@@ -257,7 +266,7 @@ app.use('*', (req, res) => {
 
 // Global error handler
 app.use((error, req, res, next) => {
-    console.error('[Server] Global error handler:', error);
+    console.error(TAG, 'Global error handler:', error);
     
     // CORS errors
     if (error.message === 'Not allowed by CORS') {
@@ -289,35 +298,91 @@ app.use((error, req, res, next) => {
 // ========================================
 // SERVER STARTUP
 // ========================================
-const server = app.listen(PORT, () => {
-    console.log('========================================');
-    console.log('🚀 PlanIT Backend Server Started');
-    console.log('========================================');
-    console.log(`Environment: ${NODE_ENV}`);
-    console.log(`Port: ${PORT}`);
-    console.log(`URL: http://localhost:${PORT}`);
-    console.log(`Status Check: http://localhost:${PORT}/status`);
-    console.log(`API Endpoints:`);
-    console.log(`  - Plan: http://localhost:${PORT}/api/plan`);
-    console.log(`  - Chat: http://localhost:${PORT}/api/chat`);
-    console.log('========================================');
-});
+const startServer = async () => {
+    try {
+        console.log('========================================');
+        console.log('🔧 PlanIT Backend Initialization');
+        console.log('========================================');
+        
+        // Initialize database connection
+        console.log('📊 Initializing database...');
+        const dbInitialized = await initializeDatabase();
+        
+        if (!dbInitialized) {
+            console.warn('⚠️  Database initialization failed - server will run without database');
+            console.warn('⚠️  Routes will fail until database is properly configured');
+        } else {
+            console.log('✅ Database initialized successfully');
+            
+            // Seed database with sample data if needed
+            console.log('🌱 Seeding database...');
+            await seedDatabase();
+            console.log('✅ Database seeding completed');
+        }
+        
+        // Start HTTP server
+        console.log('🚀 Starting HTTP server...');
+        const server = app.listen(PORT, () => {
+            console.log('========================================');
+            console.log('🚀 PlanIT Backend Server Started');
+            console.log('========================================');
+            console.log(`Environment: ${NODE_ENV}`);
+            console.log(`Port: ${PORT}`);
+            console.log(`Database: ${dbInitialized ? '✅ Connected' : '❌ Not Connected'}`);
+            console.log(`URL: http://localhost:${PORT}`);
+            console.log(`Status Check: http://localhost:${PORT}/status`);
+            console.log(`API Endpoints:`);
+            console.log(`  - Plan: http://localhost:${PORT}/api/plan`);
+            console.log(`  - Chat: http://localhost:${PORT}/api/chat`);
+            console.log('========================================');
+        });
+        
+        return server;
+        
+    } catch (error) {
+        console.error('❌ Server startup failed:', error);
+        process.exit(1);
+    }
+};
+
+// Start the server
+const server = startServer();
 
 // Graceful shutdown
+const gracefulShutdown = async (serverInstance, signal) => {
+    console.log(TAG, `${signal} received, shutting down gracefully`);
+    
+    try {
+        // Close database connections
+        console.log(TAG, 'Closing database connections...');
+        await closeDatabase();
+        
+        // Close HTTP server
+        console.log(TAG, 'Closing HTTP server...');
+        serverInstance.close(() => {
+            console.log(TAG, 'Server closed successfully');
+            process.exit(0);
+        });
+        
+        // Force exit after 30 seconds
+        setTimeout(() => {
+            console.error(TAG, 'Forceful shutdown after timeout');
+            process.exit(1);
+        }, 30000);
+        
+    } catch (error) {
+        console.error(TAG, 'Error during shutdown:', error);
+        process.exit(1);
+    }
+};
+
+// Handle process signals for graceful shutdown
 process.on('SIGTERM', () => {
-    console.log('[Server] SIGTERM received, shutting down gracefully');
-    server.close(() => {
-        console.log('[Server] Server closed');
-        process.exit(0);
-    });
+    server.then(serverInstance => gracefulShutdown(serverInstance, 'SIGTERM'));
 });
 
 process.on('SIGINT', () => {
-    console.log('[Server] SIGINT received, shutting down gracefully');
-    server.close(() => {
-        console.log('[Server] Server closed');
-        process.exit(0);
-    });
+    server.then(serverInstance => gracefulShutdown(serverInstance, 'SIGINT'));
 });
 
 module.exports = app;
