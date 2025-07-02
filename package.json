@@ -26,7 +26,8 @@
     "joi": "^17.9.2",
     "morgan": "^1.10.0",
     "compression": "^1.7.4",
-    "openai": "^4.20.1"
+    "openai": "^4.20.1",
+    "unsplash-js": "^7.0.19"
   },
   "devDependencies": {
     "nodemon": "^3.0.1",

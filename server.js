@@ -127,6 +127,18 @@ app.get('/status', async (req, res) => {
             serviceChecks.openai = { status: 'not_configured', message: 'API key not set' };
         }
         
+        // Check Unsplash API connectivity (if API key is configured)
+        if (process.env.UNSPLASH_API_KEY) {
+            try {
+                const { testConnection: testUnsplashConnection } = require('./services/unsplash');
+                serviceChecks.unsplash = await testUnsplashConnection();
+            } catch (error) {
+                serviceChecks.unsplash = { status: 'error', message: error.message };
+            }
+        } else {
+            serviceChecks.unsplash = { status: 'not_configured', message: 'API key not set' };
+        }
+        
         const healthData = {
             status: 'online',
             timestamp: new Date().toISOString(),
