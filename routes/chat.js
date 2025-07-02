@@ -35,7 +35,7 @@ const TAG = "[TripRoutes]";
  */
 let tripHistory = [
     {
-        id: 'chat_001',
+        id: '550e8400-e29b-41d4-a716-446655440001',
         title: 'Best restaurants in downtown Toronto',
         location: 'Toronto, Ontario, Canada',
         lastUpdated: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
@@ -53,7 +53,7 @@ let tripHistory = [
         }
     },
     {
-        id: 'chat_002',
+        id: '550e8400-e29b-41d4-a716-446655440002',
         title: 'Weekend activities for couples in Vancouver',
         location: 'Vancouver, British Columbia, Canada',
         lastUpdated: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
@@ -71,7 +71,7 @@ let tripHistory = [
         }
     },
     {
-        id: 'chat_003',
+        id: '550e8400-e29b-41d4-a716-446655440003',
         title: 'Family-friendly activities in Montreal',
         location: 'Montreal, Quebec, Canada',
         lastUpdated: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
@@ -99,7 +99,7 @@ let tripHistory = [
  */
 const tripIdSchema = Joi.string().uuid().required()
     .messages({
-        'string.guid': 'Invalid chat ID format',
+        'string.guid': 'Invalid chat ID format - must be a valid UUID',
         'any.required': 'Chat ID is required'
     });
 
