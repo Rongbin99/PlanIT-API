@@ -59,19 +59,26 @@ const UNSPLASH_CONFIG = {
 };
 
 /**
- * Context keywords for different activity types
+ * Location-focused search strategies for iconic city images
  */
-const CONTEXT_KEYWORDS = {
-    food: ['architecture', 'street'],
-    outdoor: ['landscape', 'nature'],
-    tourist: ['landmark', 'architecture'],
-    shopping: ['street', 'architecture'],
-    nightlife: ['cityscape', 'night'],
-    family: ['cityscape', 'park'],
-    sports: ['architecture', 'sports'],
-    business: ['skyline', 'architecture'],
-    default: ['cityscape', 'architecture']
-};
+const LOCATION_SEARCH_STRATEGIES = [
+    {
+        keywords: ['skyline', 'cityscape', 'aerial view'],
+        priority: 1
+    },
+    {
+        keywords: ['landmark', 'famous', 'iconic'],
+        priority: 2
+    },
+    {
+        keywords: ['landscape', 'panoramic', 'scenic'],
+        priority: 3
+    },
+    {
+        keywords: ['city', 'downtown', 'urban'],
+        priority: 4
+    }
+];
 
 /**
  * Image cache (in production, use Redis or similar)
@@ -83,39 +90,35 @@ const imageCache = new Map();
 // ========================================
 
 /**
- * Builds optimized search query for Unsplash based on location and context
+ * Builds optimized search queries for getting iconic location images
  * @param {string} location - Location name  
- * @param {string} context - Optional context from search query
- * @returns {string} - Optimized search query
+ * @returns {Array<string>} - Array of search queries ordered by priority
  */
-const buildImageSearchQuery = (location, context = '') => {
-    const lowerContext = context.toLowerCase();
+const buildLocationSearchQueries = (location) => {
+    const queries = [];
     
-    // Determine context type
-    let contextType = 'default';
-    if (lowerContext.includes('restaurant') || lowerContext.includes('food') || lowerContext.includes('dining')) {
-        contextType = 'food';
-    } else if (lowerContext.includes('outdoor') || lowerContext.includes('park') || lowerContext.includes('nature')) {
-        contextType = 'outdoor';
-    } else if (lowerContext.includes('tourist') || lowerContext.includes('attraction') || lowerContext.includes('museum')) {
-        contextType = 'tourist';
-    } else if (lowerContext.includes('shopping') || lowerContext.includes('mall')) {
-        contextType = 'shopping';
-    } else if (lowerContext.includes('nightlife') || lowerContext.includes('entertainment')) {
-        contextType = 'nightlife';
-    } else if (lowerContext.includes('family') || lowerContext.includes('kids')) {
-        contextType = 'family';
-    } else if (lowerContext.includes('sports') || lowerContext.includes('fitness')) {
-        contextType = 'sports';
-    } else if (lowerContext.includes('business') || lowerContext.includes('work')) {
-        contextType = 'business';
-    }
+    // Build queries for each strategy
+    LOCATION_SEARCH_STRATEGIES.forEach(strategy => {
+        strategy.keywords.forEach(keyword => {
+            queries.push(`${location} ${keyword}`);
+        });
+    });
     
-    // Get keywords for the context
-    const keywords = CONTEXT_KEYWORDS[contextType];
+    // Add a simple location-only query as final fallback
+    queries.push(location);
     
-    // Combine location with context keywords
-    return `${location} ${keywords.join(' ')}`.trim();
+    return queries;
+};
+
+/**
+ * Builds a single optimized search query for the location (primary strategy)
+ * @param {string} location - Location name  
+ * @returns {string} - Optimized search query for iconic city images
+ */
+const buildImageSearchQuery = (location) => {
+    // Use the primary strategy (skyline/cityscape) for the main search
+    const primaryStrategy = LOCATION_SEARCH_STRATEGIES[0];
+    return `${location} ${primaryStrategy.keywords.join(' ')}`;
 };
 
 /**
@@ -170,12 +173,11 @@ const getCacheKey = (location) => {
 // ========================================
 
 /**
- * Fetches image for a location from Unsplash API
+ * Fetches iconic landscape/cityscape image for a location from Unsplash API
  * @param {string} locationString - Location string (e.g., "Toronto, Ontario, Canada")
- * @param {string} context - Optional context for image search
  * @returns {Promise<Object|null>} - Image data or null
  */
-const getLocationImageDirect = async (locationString, context = '') => {
+const getLocationImageDirect = async (locationString) => {
     console.log(TAG, 'Getting image for location:', locationString);
     
     try {
@@ -203,20 +205,39 @@ const getLocationImageDirect = async (locationString, context = '') => {
             return imageCache.get(cacheKey);
         }
         
-        // Build search query with context
-        const searchQuery = buildImageSearchQuery(cleanedLocation, context);
-        console.log(TAG, 'Search query:', searchQuery);
+        // Try different search strategies to find the best location image
+        const searchQueries = buildLocationSearchQueries(cleanedLocation);
+        console.log(TAG, 'Trying search strategies for:', cleanedLocation);
         
-        // Search for photos
-        const response = await unsplashApi.search.getPhotos({
-            query: searchQuery,
-            perPage: UNSPLASH_CONFIG.defaultParams.per_page,
-            orientation: UNSPLASH_CONFIG.defaultParams.orientation,
-            contentFilter: UNSPLASH_CONFIG.defaultParams.content_filter
-        });
+        let photo = null;
+        let usedQuery = '';
         
-        if (response.type === 'success' && response.response.results?.length > 0) {
-            const photo = response.response.results[0];
+        // Try each search query until we find a good result
+        for (let i = 0; i < searchQueries.length && !photo; i++) {
+            const searchQuery = searchQueries[i];
+            console.log(TAG, `Search attempt ${i + 1}:`, searchQuery);
+            
+            try {
+                const response = await unsplashApi.search.getPhotos({
+                    query: searchQuery,
+                    perPage: UNSPLASH_CONFIG.defaultParams.per_page,
+                    orientation: UNSPLASH_CONFIG.defaultParams.orientation,
+                    contentFilter: UNSPLASH_CONFIG.defaultParams.content_filter
+                });
+                
+                if (response.type === 'success' && response.response.results?.length > 0) {
+                    photo = response.response.results[0];
+                    usedQuery = searchQuery;
+                    console.log(TAG, `Found image with query: "${searchQuery}"`);
+                    break;
+                }
+            } catch (searchError) {
+                console.warn(TAG, `Search failed for query "${searchQuery}":`, searchError.message);
+                continue;
+            }
+        }
+        
+        if (photo) {
             
             const imageData = {
                 id: photo.id,
@@ -231,7 +252,7 @@ const getLocationImageDirect = async (locationString, context = '') => {
                 unsplash_url: photo.links.html,
                 location: cleanedLocation,
                 original_location: locationString,
-                search_query: searchQuery,
+                search_query: usedQuery,
                 cached_at: new Date().toISOString()
             };
             
@@ -240,10 +261,7 @@ const getLocationImageDirect = async (locationString, context = '') => {
             console.log(TAG, 'Image fetched successfully for:', cleanedLocation);
             return imageData;
         } else {
-            console.warn(TAG, 'No images found for:', cleanedLocation);
-            if (response.type === 'error') {
-                console.error(TAG, 'API error:', response.errors);
-            }
+            console.warn(TAG, 'No images found for location after trying all search strategies:', cleanedLocation);
             return null;
         }
         
@@ -270,10 +288,7 @@ const addImagesToTrips = async (trips) => {
                     return { ...trip, image: null };
                 }
                 
-                const image = await getLocationImageDirect(
-                    trip.location, 
-                    trip.searchData?.searchQuery || trip.title
-                );
+                const image = await getLocationImageDirect(trip.location);
                 
                 return { ...trip, image };
             })
