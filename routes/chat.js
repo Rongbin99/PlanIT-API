@@ -13,6 +13,7 @@
 const express = require('express');
 const Joi = require('joi');
 const { v4: uuidv4 } = require('uuid');
+const { addImagesToTrips } = require('../services/unsplash');
 
 // ========================================
 // ROUTER SETUP
@@ -36,10 +37,8 @@ let tripHistory = [
     {
         id: 'chat_001',
         title: 'Best restaurants in downtown Toronto',
-        lastMessage: 'I found some amazing restaurants that match your criteria. Here are my top recommendations perfect for your dining experience...',
-        timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-        messageCount: 4,
-        userId: 'user_demo', // In production, this would be the actual user ID
+        location: 'Toronto, Ontario, Canada',
+        lastUpdated: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
         searchData: {
             searchQuery: 'Best restaurants in downtown Toronto',
             filters: {
@@ -51,31 +50,13 @@ let tripHistory = [
                 priceRange: 3,
                 specialOption: 'date'
             }
-        },
-        messages: [
-            {
-                id: 'msg_001',
-                type: 'user',
-                content: 'Best restaurants in downtown Toronto',
-                timestamp: new Date(Date.now() - 3600000).toISOString()
-            },
-            {
-                id: 'msg_002',
-                type: 'ai',
-                content: 'I found some amazing restaurants that match your criteria...',
-                timestamp: new Date(Date.now() - 3595000).toISOString()
-            }
-        ],
-        createdAt: new Date(Date.now() - 3600000).toISOString(),
-        updatedAt: new Date(Date.now() - 3595000).toISOString()
+        }
     },
     {
         id: 'chat_002',
         title: 'Weekend activities for couples in Vancouver',
-        lastMessage: 'Here are some romantic spots perfect for a weekend getaway. These locations offer beautiful scenery and intimate experiences...',
-        timestamp: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-        messageCount: 6,
-        userId: 'user_demo',
+        location: 'Vancouver, British Columbia, Canada',
+        lastUpdated: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
         searchData: {
             searchQuery: 'Weekend activities for couples in Vancouver',
             filters: {
@@ -87,31 +68,13 @@ let tripHistory = [
                 priceRange: 2,
                 specialOption: 'date'
             }
-        },
-        messages: [
-            {
-                id: 'msg_003',
-                type: 'user',
-                content: 'Weekend activities for couples in Vancouver',
-                timestamp: new Date(Date.now() - 86400000).toISOString()
-            },
-            {
-                id: 'msg_004',
-                type: 'ai',
-                content: 'Here are some romantic spots perfect for a weekend getaway...',
-                timestamp: new Date(Date.now() - 86395000).toISOString()
-            }
-        ],
-        createdAt: new Date(Date.now() - 86400000).toISOString(),
-        updatedAt: new Date(Date.now() - 86395000).toISOString()
+        }
     },
     {
         id: 'chat_003',
         title: 'Family-friendly activities in Montreal',
-        lastMessage: 'These activities are perfect for families with children. Each location offers engaging experiences for all ages...',
-        timestamp: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
-        messageCount: 8,
-        userId: 'user_demo',
+        location: 'Montreal, Quebec, Canada',
+        lastUpdated: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
         searchData: {
             searchQuery: 'Family-friendly activities in Montreal',
             filters: {
@@ -123,23 +86,7 @@ let tripHistory = [
                 priceRange: 2,
                 specialOption: 'family'
             }
-        },
-        messages: [
-            {
-                id: 'msg_005',
-                type: 'user',
-                content: 'Family-friendly activities in Montreal',
-                timestamp: new Date(Date.now() - 172800000).toISOString()
-            },
-            {
-                id: 'msg_006',
-                type: 'ai',
-                content: 'These activities are perfect for families with children...',
-                timestamp: new Date(Date.now() - 172795000).toISOString()
-            }
-        ],
-        createdAt: new Date(Date.now() - 172800000).toISOString(),
-        updatedAt: new Date(Date.now() - 172795000).toISOString()
+        }
     }
 ];
 
@@ -162,7 +109,7 @@ const tripIdSchema = Joi.string().uuid().required()
 const tripQuerySchema = Joi.object({
     limit: Joi.number().integer().min(1).max(100).default(50),
     offset: Joi.number().integer().min(0).default(0),
-    sortBy: Joi.string().valid('timestamp', 'title', 'messageCount').default('timestamp'),
+    sortBy: Joi.string().valid('lastUpdated', 'title').default('lastUpdated'),
     sortOrder: Joi.string().valid('asc', 'desc').default('desc'),
     search: Joi.string().max(100).optional()
 });
@@ -172,7 +119,7 @@ const tripQuerySchema = Joi.object({
 // ========================================
 
 /**
- * Formats chat data for list view (removes full message content)
+ * Formats chat data for list view
  * @param {Object} chat - Full chat object
  * @returns {Object} - Formatted chat list item
  */
@@ -180,9 +127,8 @@ const formatTripForList = (chat) => {
     return {
         id: chat.id,
         title: chat.title,
-        lastMessage: chat.lastMessage,
-        timestamp: chat.timestamp,
-        messageCount: chat.messageCount,
+        location: chat.location,
+        lastUpdated: chat.lastUpdated,
         searchData: chat.searchData // Include search data for context
     };
 };
@@ -199,8 +145,8 @@ const sortTrips = (chats, sortBy, sortOrder) => {
         let aValue = a[sortBy];
         let bValue = b[sortBy];
         
-        // Handle timestamp sorting
-        if (sortBy === 'timestamp') {
+        // Handle lastUpdated sorting
+        if (sortBy === 'lastUpdated') {
             aValue = new Date(aValue).getTime();
             bValue = new Date(bValue).getTime();
         }
@@ -231,7 +177,7 @@ const filterTrips = (chats, searchQuery) => {
     const query = searchQuery.toLowerCase();
     return chats.filter(chat => 
         chat.title.toLowerCase().includes(query) ||
-        chat.lastMessage.toLowerCase().includes(query) ||
+        chat.location.toLowerCase().includes(query) ||
         chat.searchData?.searchQuery?.toLowerCase().includes(query)
     );
 };
@@ -312,10 +258,14 @@ router.get('/', async (req, res) => {
         // Format chats for list view
         const formattedTrips = paginatedTrips.map(formatTripForList);
 
+        // Add location images from Unsplash API
+        console.log(TAG, 'Fetching images for', formattedTrips.length, 'trips');
+        const tripsWithImages = await addImagesToTrips(formattedTrips);
+
         // Prepare response
         const response = {
             success: true,
-            trips: formattedTrips,
+            trips: tripsWithImages,
             pagination: {
                 total: totalCount,
                 limit: limit,
@@ -327,7 +277,8 @@ router.get('/', async (req, res) => {
                 sortBy: sortBy,
                 sortOrder: sortOrder,
                 searchQuery: search || null,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                imagesIncluded: true
             }
         };
 
@@ -402,10 +353,15 @@ router.get('/:chatId', async (req, res) => {
             messageCount: trip.messageCount
         });
 
+        // Add location image from Unsplash API
+        console.log(TAG, 'Fetching image for individual trip');
+        const tripsWithImages = await addImagesToTrips([trip]);
+        const tripWithImage = tripsWithImages[0];
+
         // Prepare response
         const response = {
             success: true,
-            trip: trip,
+            trip: tripWithImage,
             timestamp: new Date().toISOString()
         };
 
@@ -526,9 +482,9 @@ router.get('/status', (req, res) => {
         statistics: {
             totalTrips: tripHistory.length,
             oldestTrip: tripHistory.length > 0 ? 
-                Math.min(...tripHistory.map(c => new Date(c.createdAt).getTime())) : null,
+                Math.min(...tripHistory.map(c => new Date(c.lastUpdated).getTime())) : null,
             newestTrip: tripHistory.length > 0 ? 
-                Math.max(...tripHistory.map(c => new Date(c.createdAt).getTime())) : null
+                Math.max(...tripHistory.map(c => new Date(c.lastUpdated).getTime())) : null
         },
         endpoints: {
             list: 'GET /api/chat',
