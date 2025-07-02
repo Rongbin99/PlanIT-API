@@ -15,6 +15,7 @@ This [express.js](https://expressjs.com/) backend server responds to API callbac
 
 - Node.js (v16.0.0 or higher)
 - npm or yarn package manager
+- PostgreSQL (v12.0 or higher)
 
 ### Setup
 
