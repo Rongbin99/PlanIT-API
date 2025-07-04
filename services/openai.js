@@ -13,8 +13,10 @@
 const OpenAI = require('openai');
 
 // ========================================
-// CONFIGURATION
+// CONFIGURATION AND CONSTANTS
 // ========================================
+
+const TAG = '[OpenAI]';
 
 /**
  * OpenAI client instance
@@ -26,7 +28,7 @@ let openai = null;
  */
 const initializeOpenAI = () => {
     if (!process.env.OPENAI_API_KEY) {
-        console.warn('[OpenAI] No API key found, using mock responses');
+        console.warn(TAG, 'No API key found, using mock responses');
         return null;
     }
 
@@ -34,10 +36,10 @@ const initializeOpenAI = () => {
         openai = new OpenAI({
             apiKey: process.env.OPENAI_API_KEY,
         });
-        console.log('[OpenAI] Client initialized successfully');
+        console.log(TAG, 'Client initialized successfully');
         return openai;
     } catch (error) {
-        console.error('[OpenAI] Failed to initialize client:', error.message);
+        console.error(TAG, 'Failed to initialize client:', error.message);
         return null;
     }
 };
@@ -52,16 +54,6 @@ const AI_CONFIG = {
     topP: 0.9,
     frequencyPenalty: 0.1,
     presencePenalty: 0.1
-};
-
-/**
- * Price range mapping for AI context
- */
-const PRICE_RANGE_MAP = {
-    1: '$ (Budget-friendly, under $20 per person)',
-    2: '$$ (Moderate, $20-30 per person)',
-    3: '$$$ (Upscale, $30-50 per person)',
-    4: '$$$+ (Luxury, $50+ per person)'
 };
 
 // ========================================
@@ -101,7 +93,7 @@ Remember: You're helping people create memorable experiences, so be specific and
  * @returns {string} - Formatted user prompt
  */
 const buildUserPrompt = (searchData, userMessage) => {
-    const { searchQuery, filters } = searchData;
+    const { searchQuery, location, filters } = searchData;
     const {
         timeOfDay,
         environment,
@@ -116,8 +108,23 @@ const buildUserPrompt = (searchData, userMessage) => {
 
 Search Query: "${searchQuery}"
 User Message: "${userMessage}"
+`;
 
-PREFERENCES:
+    // Add location information if provided
+    if (location && location.coords) {
+        prompt += `\nLOCATION CONTEXT:\n`;
+        if (location.coords.latitude && location.coords.longitude) {
+            prompt += `🗺️ Coordinates: ${location.coords.latitude}, ${location.coords.longitude}\n`;
+        }
+        if (location.coords.accuracy) {
+            prompt += `📍 Location Accuracy: ${location.coords.accuracy}m\n`;
+        }
+        if (location.mocked) {
+            prompt += `⚠️ Note: This is a simulated location\n`;
+        }
+    }
+
+    prompt += `\nPREFERENCES:
 `;
 
     // Time preferences
@@ -136,10 +143,11 @@ PREFERENCES:
         prompt += `🚌 Include Transportation: Yes - please include transit options and routes\n`;
     }
 
-    // Food planning
+    // Food planning - handle priceRange as string
     if (planFood && priceRange) {
-        const priceDescription = PRICE_RANGE_MAP[priceRange] || 'Not specified';
-        prompt += `🍽️ Include Dining: Yes - Budget: ${priceDescription}\n`;
+        prompt += `🍽️ Include Dining: Yes - Budget: ${priceRange}\n`;
+    } else if (planFood) {
+        prompt += `🍽️ Include Dining: Yes\n`;
     }
 
     // Special options
@@ -165,19 +173,34 @@ PREFERENCES:
  * @returns {string} - Mock response
  */
 const generateMockResponse = (searchData) => {
-    const { searchQuery, filters } = searchData;
+    const { searchQuery, location, filters } = searchData;
+    
+    let locationText = '';
+    let locationDetails = '';
+    
+    if (location && location.coords) {
+        if (location.coords.latitude && location.coords.longitude) {
+            locationText = ` at coordinates ${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`;
+            locationDetails = `**📍 Location Details:**
+• Coordinates: ${location.coords.latitude}, ${location.coords.longitude}
+${location.coords.accuracy ? `• Accuracy: ${location.coords.accuracy}m` : ''}
+${location.mocked ? '• Note: Simulated location' : '• Note: Real GPS location'}
+
+`;
+        }
+    }
     
     return `🎯 **${searchQuery}**
 
-I'd love to help you plan this trip! Here are some great recommendations:
+I'd love to help you plan this trip${locationText}! Here are some great recommendations:
 
-**Top Suggestions:**
+${locationDetails}**Top Suggestions:**
 • **Local Favorites** - Highly rated spots that locals love
 • **Must-See Attractions** - Popular destinations perfect for your ${filters.groupSize} group
 • **Hidden Gems** - Unique experiences you won't find in typical guides
 
 ${filters.planFood ? `**Dining Recommendations:**
-• Budget-friendly options that match your preferences
+• Budget-friendly options that match your preferences (${filters.priceRange || 'Budget not specified'})
 • Local cuisine worth trying
 • Convenient locations near your activities` : ''}
 
@@ -208,7 +231,7 @@ ${filters.planTransit ? `**Transportation Tips:**
  */
 const generateTripPlan = async (searchData, userMessage) => {
     const startTime = Date.now();
-    console.log('[OpenAI] Generating trip plan for:', {
+    console.log(TAG, 'Generating trip plan for:', {
         query: searchData.searchQuery,
         filters: Object.keys(searchData.filters).length,
         hasApiKey: !!process.env.OPENAI_API_KEY
@@ -217,7 +240,7 @@ const generateTripPlan = async (searchData, userMessage) => {
     try {
         // Check if OpenAI is available
         if (!openai) {
-            console.log('[OpenAI] Using mock response (no API key or client failed to initialize)');
+            console.log(TAG, 'Using mock response (no API key or client failed to initialize)');
             const mockResponse = generateMockResponse(searchData);
             
             return {
@@ -237,8 +260,8 @@ const generateTripPlan = async (searchData, userMessage) => {
         const systemPrompt = buildSystemPrompt();
         const userPrompt = buildUserPrompt(searchData, userMessage);
 
-        console.log('[OpenAI] Sending request to GPT model:', AI_CONFIG.model);
-        console.log('[OpenAI] User prompt length:', userPrompt.length);
+        console.log(TAG, 'Sending request to GPT model:', AI_CONFIG.model);
+        console.log(TAG, 'User prompt length:', userPrompt.length);
 
         // Make API call to OpenAI
         const completion = await openai.chat.completions.create({
@@ -257,7 +280,7 @@ const generateTripPlan = async (searchData, userMessage) => {
         const response = completion.choices[0].message.content;
         const usage = completion.usage;
 
-        console.log('[OpenAI] Response generated successfully:', {
+        console.log(TAG, 'Response generated successfully:', {
             responseLength: response.length,
             tokensUsed: usage.total_tokens,
             processingTime: Date.now() - startTime
@@ -272,10 +295,10 @@ const generateTripPlan = async (searchData, userMessage) => {
         };
 
     } catch (error) {
-        console.error('[OpenAI] Error generating trip plan:', error);
+        console.error(TAG, 'Error generating trip plan:', error);
 
         // Fallback to mock response on error
-        console.log('[OpenAI] Falling back to mock response due to error');
+        console.log(TAG, 'Falling back to mock response due to error');
         const mockResponse = generateMockResponse(searchData);
 
         return {
@@ -298,7 +321,7 @@ const generateTripPlan = async (searchData, userMessage) => {
  * @returns {Promise<Object>} - Connection test result
  */
 const testConnection = async () => {
-    console.log('[OpenAI] Testing connection...');
+    console.log(TAG, 'Testing connection...');
 
     try {
         if (!openai) {
@@ -316,7 +339,7 @@ const testConnection = async () => {
             max_tokens: 20
         });
 
-        console.log('[OpenAI] Connection test successful');
+        console.log(TAG, 'Connection test successful');
         return {
             success: true,
             message: 'OpenAI connection successful',
@@ -325,7 +348,7 @@ const testConnection = async () => {
         };
 
     } catch (error) {
-        console.error('[OpenAI] Connection test failed:', error.message);
+        console.error(TAG, 'Connection test failed:', error.message);
         return {
             success: false,
             message: `Connection failed: ${error.message}`,

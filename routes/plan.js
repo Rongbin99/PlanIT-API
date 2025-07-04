@@ -21,18 +21,10 @@ const openaiService = require('../services/openai');
 const router = express.Router();
 
 // ========================================
-// VALIDATION SCHEMAS
+// CONSTANTS
 // ========================================
 
-/**
- * Price range mapping for validation
- */
-const PRICE_RANGE_MAP = {
-    1: '$',
-    2: '$$',
-    3: '$$$',
-    4: '$$$+'
-};
+const TAG = '[PlanRoutes]';
 
 /**
  * Search data validation schema
@@ -44,6 +36,19 @@ const searchDataSchema = Joi.object({
             'string.min': 'Search query must be at least 1 character',
             'string.max': 'Search query cannot exceed 500 characters'
         }),
+    location: Joi.object({
+        coords: Joi.object({
+            latitude: Joi.number().optional(),
+            longitude: Joi.number().optional(),
+            accuracy: Joi.number().optional(),
+            altitude: Joi.number().optional(),
+            altitudeAccuracy: Joi.number().optional(),
+            heading: Joi.number().optional(),
+            speed: Joi.number().optional()
+        }).optional(),
+        mocked: Joi.boolean().optional(),
+        timestamp: Joi.number().optional()
+    }).optional(),
     filters: Joi.object({
         timeOfDay: Joi.array().items(
             Joi.string().valid('morning', 'afternoon', 'evening')
@@ -52,12 +57,8 @@ const searchDataSchema = Joi.object({
         planTransit: Joi.boolean().default(false),
         groupSize: Joi.string().valid('solo', 'duo', 'group').default('solo'),
         planFood: Joi.boolean().default(false),
-        priceRange: Joi.number().integer().min(1).max(4).when('planFood', {
-            is: true,
-            then: Joi.required(),
-            otherwise: Joi.optional()
-        }),
-        specialOption: Joi.string().valid('auto', 'casual', 'tourist', 'wander', 'date', 'family').default('auto')
+        priceRange: Joi.string().optional(),
+        specialOption: Joi.string().valid('adventure', 'casual', 'tourist', 'wander', 'date', 'family').optional()
     }).required(),
     timestamp: Joi.string().isoDate().required()
 });
@@ -74,19 +75,30 @@ const planRequestSchema = Joi.object({
 // HELPER FUNCTIONS
 // ========================================
 
-
-
 /**
  * Logs request details for debugging
  * @param {Object} req - Express request object
  */
 const logRequestDetails = (req) => {
-    console.log('[PlanRoutes] Plan request details:', {
+    const searchData = req.body.searchData;
+    const logData = {
         ip: req.ip,
         userAgent: req.get('User-Agent'),
-        searchQuery: req.body.searchData?.searchQuery,
+        searchQuery: searchData?.searchQuery,
         timestamp: new Date().toISOString()
-    });
+    };
+    
+    // Add location information if available
+    if (searchData?.location?.coords) {
+        logData.location = {
+            latitude: searchData.location.coords.latitude,
+            longitude: searchData.location.coords.longitude,
+            accuracy: searchData.location.coords.accuracy,
+            mocked: searchData.location.mocked
+        };
+    }
+    
+    console.log(TAG, 'Plan request details:', logData);
 };
 
 // ========================================
@@ -101,18 +113,18 @@ const logRequestDetails = (req) => {
  */
 router.post('/', async (req, res) => {
     const startTime = Date.now();
-    console.log('[PlanRoutes] POST /api/plan - Request received');
+    console.log(TAG, 'POST /api/plan - Request received');
     
     try {
         // Log request details
         logRequestDetails(req);
         
         // Validate request body
-        console.log('[PlanRoutes] Validating request body');
+        console.log(TAG, 'Validating request body');
         const { error, value } = planRequestSchema.validate(req.body);
         
         if (error) {
-            console.warn('[PlanRoutes] Validation failed:', error.details[0].message);
+            console.warn(TAG, 'Validation failed:', error.details[0].message);
             return res.status(400).json({
                 success: false,
                 error: 'Validation Error',
@@ -122,23 +134,36 @@ router.post('/', async (req, res) => {
         }
 
         const { searchData, userMessage } = value;
-        console.log('[PlanRoutes] Request validated successfully');
-        console.log('[PlanRoutes] Search data:', {
+        console.log(TAG, 'Request validated successfully');
+        
+        // Build detailed log data
+        const logData = {
             query: searchData.searchQuery,
             filters: {
                 ...searchData.filters,
-                priceRange: searchData.filters.priceRange ? 
-                    `${searchData.filters.priceRange} (${PRICE_RANGE_MAP[searchData.filters.priceRange]})` : 
-                    undefined
+                priceRange: searchData.filters.priceRange || 'not specified'
             }
-        });
+        };
+        
+        // Add location information if available
+        if (searchData.location?.coords) {
+            logData.location = {
+                latitude: searchData.location.coords.latitude,
+                longitude: searchData.location.coords.longitude,
+                accuracy: searchData.location.coords.accuracy,
+                mocked: searchData.location.mocked,
+                hasCoordinates: !!(searchData.location.coords.latitude && searchData.location.coords.longitude)
+            };
+        }
+        
+        console.log(TAG, 'Search data:', logData);
 
         // Generate unique chat ID
         const chatId = uuidv4();
-        console.log('[PlanRoutes] Generated chat ID:', chatId);
+        console.log(TAG, 'Generated chat ID:', chatId);
 
         // Generate AI response using OpenAI service
-        console.log('[PlanRoutes] Generating AI response via OpenAI');
+        console.log(TAG, 'Generating AI response via OpenAI');
         const aiResult = await openaiService.generateTripPlan(searchData, userMessage);
 
         // Prepare response
@@ -151,6 +176,13 @@ router.post('/', async (req, res) => {
                 totalTime: Date.now() - startTime,
                 searchQuery: searchData.searchQuery,
                 filterCount: Object.keys(searchData.filters).length,
+                hasLocation: !!searchData.location,
+                locationInfo: searchData.location ? {
+                    hasCoords: !!(searchData.location.coords?.latitude && searchData.location.coords?.longitude),
+                    accuracy: searchData.location.coords?.accuracy,
+                    mocked: searchData.location.mocked,
+                    hasCoordinates: !!(searchData.location.coords?.latitude && searchData.location.coords?.longitude)
+                } : null,
                 aiModel: aiResult.model,
                 aiSource: aiResult.source,
                 tokenUsage: aiResult.usage,
@@ -158,7 +190,7 @@ router.post('/', async (req, res) => {
             }
         };
 
-        console.log('[PlanRoutes] Response prepared:', {
+        console.log(TAG, 'Response prepared:', {
             chatId: response.chatId,
             responseLength: response.response.length,
             processingTime: response.metadata.processingTime,
@@ -169,7 +201,7 @@ router.post('/', async (req, res) => {
 
         // Send response
         res.status(200).json(response);
-        console.log('[PlanRoutes] Response sent successfully');
+        console.log(TAG, 'Response sent successfully');
 
         // TODO: In production, you might want to:
         // 1. Save the chat to a database
@@ -179,7 +211,7 @@ router.post('/', async (req, res) => {
         // 5. Log to external monitoring services
 
     } catch (error) {
-        console.error('[PlanRoutes] Error processing plan request:', error);
+        console.error(TAG, 'Error processing plan request:', error);
         
         res.status(500).json({
             success: false,
@@ -197,7 +229,7 @@ router.post('/', async (req, res) => {
  * Returns the status of the planning service including OpenAI status
  */
 router.get('/status', (req, res) => {
-    console.log('[PlanRoutes] GET /api/plan/status - Status check requested');
+    console.log(TAG, 'GET /api/plan/status - Status check requested');
     
     const openaiStatus = openaiService.getServiceStatus();
     
@@ -221,7 +253,7 @@ router.get('/status', (req, res) => {
  * Tests OpenAI connection and returns result
  */
 router.get('/test-ai', async (req, res) => {
-    console.log('[PlanRoutes] GET /api/plan/test-ai - OpenAI test requested');
+    console.log(TAG, 'GET /api/plan/test-ai - OpenAI test requested');
     
     try {
         const testResult = await openaiService.testConnection();
@@ -233,7 +265,7 @@ router.get('/test-ai', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[PlanRoutes] OpenAI test failed:', error);
+        console.error(TAG, 'OpenAI test failed:', error);
         res.status(500).json({
             service: 'OpenAI Test',
             success: false,
@@ -253,7 +285,7 @@ router.get('/test-ai', async (req, res) => {
  */
 router.all('/', (req, res) => {
     if (req.method !== 'POST') {
-        console.warn(`[PlanRoutes] Unsupported method: ${req.method}`);
+        console.warn(TAG, `Unsupported method: ${req.method}`);
         return res.status(405).json({
             success: false,
             error: 'Method Not Allowed',
