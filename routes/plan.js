@@ -51,13 +51,16 @@ const searchDataSchema = Joi.object({
     }).optional(),
     filters: Joi.object({
         timeOfDay: Joi.array().items(
-            Joi.string().valid('morning', 'afternoon', 'evening')
+            Joi.string().valid('morning', 'afternoon', 'evening', 'allDay')
         ).default([]),
         environment: Joi.string().valid('indoor', 'outdoor', 'mixed').default('indoor'),
         planTransit: Joi.boolean().default(false),
         groupSize: Joi.string().valid('solo', 'duo', 'group').default('solo'),
         planFood: Joi.boolean().default(false),
-        priceRange: Joi.string().optional(),
+        priceRange: Joi.alternatives().try(
+            Joi.number().min(1).max(4),
+            Joi.string()
+        ).optional(),
         specialOption: Joi.string().valid('adventure', 'casual', 'tourist', 'wander', 'date', 'family').optional()
     }).required(),
     timestamp: Joi.string().isoDate().required()
