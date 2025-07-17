@@ -247,7 +247,24 @@ const extractLocationFromSearchData = (searchData) => {
         if (query.includes(pattern)) {
             const parts = query.split(pattern);
             let location = parts[parts.length - 1].trim();
-            
+
+            // Improved: Stop at trailing words (e.g., 'for', 'with', etc.)
+            const trailingWords = [
+                'for', 'with', 'and', 'or', 'but', 'so', 'yet', 'because',
+                'restaurants', 'food', 'places', 'activities', 'things',
+                'coffee', 'dinner', 'lunch', 'breakfast', 'shopping',
+                'today', 'tomorrow', 'tonight', 'weekend', 'a', 'an', 'the', 'on', 'at', 'to', 'from', 'by', 'of', 'in'
+            ];
+            const locationWords = location.split(' ');
+            let endIdx = locationWords.length;
+            for (let i = 0; i < locationWords.length; i++) {
+                if (trailingWords.includes(locationWords[i].toLowerCase())) {
+                    endIdx = i;
+                    break;
+                }
+            }
+            location = locationWords.slice(0, endIdx).join(' ').trim();
+
             // Clean up the extracted location
             location = cleanLocationString(location, originalQuery);
             
