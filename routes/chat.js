@@ -19,8 +19,10 @@ const {
     getTripById, 
     createTrip, 
     updateTrip, 
-    deleteTrip 
+    deleteTrip,
+    pool
 } = require('../services/database');
+const { optionalAuth, authenticateToken } = require('../middleware/auth');
 
 // ========================================
 // ROUTER SETUP
@@ -30,72 +32,7 @@ const router = express.Router();
 // ========================================
 // CONSTANTS
 // ========================================
-const TAG = "[TripRoutes]";
-
-// ========================================
-// DATABASE LINKING
-// ========================================
-// TODO: PostgreSql database
-
-/**
- * In-memory trip planning storage
- */
-let tripHistory = [
-    {
-        id: '550e8400-e29b-41d4-a716-446655440001',
-        title: 'Best restaurants in downtown Toronto',
-        location: 'Toronto, Ontario, Canada',
-        lastUpdated: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-        searchData: {
-            searchQuery: 'Best restaurants in downtown Toronto',
-            filters: {
-                timeOfDay: ['evening'],
-                environment: 'indoor',
-                planTransit: false,
-                groupSize: 'duo',
-                planFood: true,
-                priceRange: 3,
-                specialOption: 'date'
-            }
-        }
-    },
-    {
-        id: '550e8400-e29b-41d4-a716-446655440002',
-        title: 'Weekend activities for couples in Vancouver',
-        location: 'Vancouver, British Columbia, Canada',
-        lastUpdated: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-        searchData: {
-            searchQuery: 'Weekend activities for couples in Vancouver',
-            filters: {
-                timeOfDay: ['afternoon', 'evening'],
-                environment: 'mixed',
-                planTransit: true,
-                groupSize: 'duo',
-                planFood: true,
-                priceRange: 2,
-                specialOption: 'date'
-            }
-        }
-    },
-    {
-        id: '550e8400-e29b-41d4-a716-446655440003',
-        title: 'Family-friendly activities in Montreal',
-        location: 'Montreal, Quebec, Canada',
-        lastUpdated: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
-        searchData: {
-            searchQuery: 'Family-friendly activities in Montreal',
-            filters: {
-                timeOfDay: ['morning', 'afternoon'],
-                environment: 'outdoor',
-                planTransit: true,
-                groupSize: 'group',
-                planFood: true,
-                priceRange: 2,
-                specialOption: 'family'
-            }
-        }
-    }
-];
+const TAG = "[ChatRoutes]";
 
 // ========================================
 // VALIDATION SCHEMAS
@@ -126,6 +63,32 @@ const tripQuerySchema = Joi.object({
 // ========================================
 
 /**
+ * Cleans up associated files and data for a deleted trip
+ * @param {string} chatId - Trip ID
+ * @param {Object} tripData - Trip data
+ */
+const cleanupTripData = async (chatId, tripData) => {
+    try {
+        console.log(TAG, 'Starting cleanup for trip:', chatId);
+        
+        // Clean up any cached files (if implemented in the future)
+        // await cleanupCachedImages(chatId);
+        
+        // Clean up any temporary data
+        // await cleanupTempData(chatId);
+        
+        // Log cleanup completion
+        console.log(TAG, 'Cleanup completed for trip:', chatId);
+        
+    } catch (error) {
+        console.error(TAG, 'Error during cleanup for trip:', chatId, error);
+        // Don't throw - cleanup failure shouldn't break deletion
+    }
+};
+
+
+
+/**
  * Formats chat data for list view
  * @param {Object} chat - Full chat object
  * @returns {Object} - Formatted chat list item
@@ -138,55 +101,6 @@ const formatTripForList = (chat) => {
         lastUpdated: chat.lastUpdated,
         searchData: chat.searchData // Include search data for context
     };
-};
-
-/**
- * Sorts chat array based on criteria
- * @param {Array} chats - Array of chat objects
- * @param {string} sortBy - Field to sort by
- * @param {string} sortOrder - Sort order (asc/desc)
- * @returns {Array} - Sorted chat array
- */
-const sortTrips = (chats, sortBy, sortOrder) => {
-    return chats.sort((a, b) => {
-        let aValue = a[sortBy];
-        let bValue = b[sortBy];
-        
-        // Handle lastUpdated sorting
-        if (sortBy === 'lastUpdated') {
-            aValue = new Date(aValue).getTime();
-            bValue = new Date(bValue).getTime();
-        }
-        
-        // Handle string sorting
-        if (typeof aValue === 'string' && typeof bValue === 'string') {
-            aValue = aValue.toLowerCase();
-            bValue = bValue.toLowerCase();
-        }
-        
-        if (sortOrder === 'desc') {
-            return bValue > aValue ? 1 : -1;
-        } else {
-            return aValue > bValue ? 1 : -1;
-        }
-    });
-};
-
-/**
- * Filters chats based on search query
- * @param {Array} chats - Array of chat objects
- * @param {string} searchQuery - Search query string
- * @returns {Array} - Filtered chat array
- */
-const filterTrips = (chats, searchQuery) => {
-    if (!searchQuery) return chats;
-    
-    const query = searchQuery.toLowerCase();
-    return chats.filter(chat => 
-        chat.title.toLowerCase().includes(query) ||
-        chat.location.toLowerCase().includes(query) ||
-        chat.searchData?.searchQuery?.toLowerCase().includes(query)
-    );
 };
 
 /**
@@ -212,8 +126,9 @@ const logRequestDetails = (req, action) => {
  * GET /api/chat
  * 
  * Retrieves trip history with optional filtering, sorting, and pagination.
+ * Uses optional authentication - shows user's trips if authenticated, public trips if not.
  */
-router.get('/', async (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
     console.log(TAG, 'GET /api/chat - Trip history requested');
     
     try {
@@ -237,33 +152,22 @@ router.get('/', async (req, res) => {
         const { limit, offset, sortBy, sortOrder, search } = value;
         console.log(TAG, 'Query parameters:', { limit, offset, sortBy, sortOrder, search });
 
-        // TODO: In production, filter by user ID from authentication
-        // const userId = req.user.id;
-        // let userChats = chatHistory.filter(chat => chat.userId === userId);
+        // Get trips from database with filtering, sorting, and pagination
+        console.log(TAG, 'Fetching trips from database for user:', req.userId || 'anonymous');
+        const dbResult = await getTrips({
+            limit,
+            offset,
+            sortBy,
+            sortOrder,
+            search,
+            userId: req.userId
+        });
         
-        // Clone the array for processing
-        let userTrips = [...tripHistory]; 
-        console.log(TAG, 'Initial trip count:', userTrips.length);
-
-        // Apply search filter
-        if (search) {
-            userTrips = filterTrips(userTrips, search);
-            console.log(TAG, 'After search filter:', userTrips.length, 'trips');
-        }
-
-        // Apply sorting
-        userTrips = sortTrips(userTrips, sortBy, sortOrder);
-        console.log(TAG, 'Applied sorting:', sortBy, sortOrder);
-
-        // Get total count before pagination
-        const totalCount = userTrips.length;
-
-        // Apply pagination
-        const paginatedTrips = userTrips.slice(offset, offset + limit);
-        console.log(TAG, 'Paginated results:', paginatedTrips.length, 'trips');
+        const { trips: userTrips, pagination } = dbResult;
+        console.log(TAG, 'Retrieved from database:', userTrips.length, 'trips');
 
         // Format chats for list view
-        const formattedTrips = paginatedTrips.map(formatTripForList);
+        const formattedTrips = userTrips.map(formatTripForList);
 
         // Add location images from Unsplash API
         console.log(TAG, 'Fetching images for', formattedTrips.length, 'trips');
@@ -273,13 +177,7 @@ router.get('/', async (req, res) => {
         const response = {
             success: true,
             trips: tripsWithImages,
-            pagination: {
-                total: totalCount,
-                limit: limit,
-                offset: offset,
-                hasMore: offset + limit < totalCount,
-                nextOffset: offset + limit < totalCount ? offset + limit : null
-            },
+            pagination: pagination,
             metadata: {
                 sortBy: sortBy,
                 sortOrder: sortOrder,
@@ -312,11 +210,167 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * GET /api/chat/audit
+ * 
+ * Returns audit logs for chat operations (admin access recommended)
+ */
+router.get('/audit', authenticateToken, async (req, res) => {
+    try {
+        console.log(TAG, 'GET /api/chat/audit - Audit logs requested by user:', req.userId);
+        
+        // TODO: Add admin role check in production
+        // if (!req.user.isAdmin) {
+        //     return res.status(403).json({
+        //         success: false,
+        //         error: 'Forbidden',
+        //         message: 'Admin access required'
+        //     });
+        // }
+        
+        const { 
+            limit = 50, 
+            offset = 0, 
+            entityId, 
+            action,
+            startDate,
+            endDate 
+        } = req.query;
+        
+        // Build query filters
+        let whereConditions = ["entity_type = 'trip'"];
+        let params = [];
+        
+        if (entityId) {
+            whereConditions.push(`entity_id = $${params.length + 1}`);
+            params.push(entityId);
+        }
+        
+        if (action) {
+            whereConditions.push(`action = $${params.length + 1}`);
+            params.push(action);
+        }
+        
+        if (startDate) {
+            whereConditions.push(`timestamp >= $${params.length + 1}`);
+            params.push(startDate);
+        }
+        
+        if (endDate) {
+            whereConditions.push(`timestamp <= $${params.length + 1}`);
+            params.push(endDate);
+        }
+        
+        const whereClause = whereConditions.join(' AND ');
+        
+        // Get audit logs
+        const auditQuery = `
+            SELECT al.*, u.email as user_email, u.name as user_name
+            FROM audit_logs al
+            LEFT JOIN users u ON al.user_id = u.id
+            WHERE ${whereClause}
+            ORDER BY al.timestamp DESC
+            LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+        `;
+        
+        params.push(parseInt(limit), parseInt(offset));
+        
+        const result = await pool.query(auditQuery, params);
+        
+        const auditLogs = result.rows.map(log => ({
+            id: log.id,
+            entityType: log.entity_type,
+            entityId: log.entity_id,
+            action: log.action,
+            userId: log.user_id,
+            userEmail: log.user_email,
+            userName: log.user_name,
+            oldData: log.old_data,
+            newData: log.new_data,
+            ipAddress: log.ip_address,
+            userAgent: log.user_agent,
+            timestamp: log.timestamp
+        }));
+        
+        res.json({
+            success: true,
+            auditLogs,
+            pagination: {
+                limit: parseInt(limit),
+                offset: parseInt(offset),
+                total: auditLogs.length
+            },
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error(TAG, 'Error fetching audit logs:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal Server Error',
+            message: 'Failed to fetch audit logs',
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+/**
+ * GET /api/chat/status
+ * 
+ * Returns the status of the chat service
+ */
+router.get('/status', async (req, res) => {
+    console.log(TAG, 'GET /api/chat/status - Status check requested');
+    
+    try {
+        // Get database statistics
+        const dbResult = await getTrips({ limit: 1000 }); // Get reasonable count for stats
+        const totalTrips = dbResult.pagination.total;
+        
+        res.status(200).json({
+            service: 'Trip API',
+            status: 'operational',
+            version: '1.0.0',
+            statistics: {
+                totalTrips: totalTrips,
+                dataSource: 'PostgreSQL Database'
+            },
+            endpoints: {
+                list: 'GET /api/chat',
+                get: 'GET /api/chat/:chatId',
+                delete: 'DELETE /api/chat/:chatId',
+                status: 'GET /api/chat/status'
+            },
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error(TAG, 'Error getting database statistics:', error);
+        res.status(200).json({
+            service: 'Trip API',
+            status: 'operational',
+            version: '1.0.0',
+            statistics: {
+                totalTrips: 'Unable to fetch',
+                dataSource: 'PostgreSQL Database (connection error)'
+            },
+            endpoints: {
+                list: 'GET /api/chat',
+                get: 'GET /api/chat/:chatId',
+                delete: 'DELETE /api/chat/:chatId',
+                status: 'GET /api/chat/status'
+            },
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+/**
  * GET /api/chat/:chatId
  * 
  * Retrieves a specific trip planning conversation by ID.
+ * Uses optional authentication to verify ownership of private trips.
  */
-router.get('/:chatId', async (req, res) => {
+router.get('/:chatId', optionalAuth, async (req, res) => {
     console.log(TAG, 'GET /api/chat/:chatId - Specific chat requested');
     
     try {
@@ -340,9 +394,8 @@ router.get('/:chatId', async (req, res) => {
         const chatId = value;
         console.log(TAG, 'Looking for chat ID:', chatId);
 
-        // Find chat by ID
-        // TODO: In production, also verify user ownership
-        const trip = tripHistory.find(c => c.id === chatId);
+        // Find chat by ID from database
+        const trip = await getTripById(chatId);
         
         if (!trip) {
             console.warn(TAG, 'Chat not found:', chatId);
@@ -354,10 +407,50 @@ router.get('/:chatId', async (req, res) => {
             });
         }
 
-        console.log(TAG, 'Chat found:', {
+        // Verify user ownership for access control
+        console.log(TAG, 'Verifying user access for trip:', {
+            tripId: trip.id,
+            tripUserId: trip.userId,
+            requestUserId: req.userId
+        });
+
+        // Check access based on authentication status
+        if (req.userId) {
+            // Authenticated user - must own the trip
+            if (trip.userId !== req.userId) {
+                console.warn(TAG, 'Access denied: User does not own this trip:', {
+                    tripId: chatId,
+                    tripOwner: trip.userId,
+                    requestingUser: req.userId
+                });
+                return res.status(403).json({
+                    success: false,
+                    error: 'Access Denied',
+                    message: 'You do not have permission to view this trip',
+                    timestamp: new Date().toISOString()
+                });
+            }
+        } else {
+            // Non-authenticated user - can only view trips without user_id (legacy trips)
+            if (trip.userId !== null) {
+                console.warn(TAG, 'Access denied: Non-authenticated user trying to view user trip:', {
+                    tripId: chatId,
+                    tripOwner: trip.userId
+                });
+                return res.status(403).json({
+                    success: false,
+                    error: 'Access Denied',
+                    message: 'This trip belongs to a registered user and requires authentication to view',
+                    timestamp: new Date().toISOString()
+                });
+            }
+        }
+
+        console.log(TAG, 'Access verification passed. Chat found:', {
             id: trip.id,
             title: trip.title,
-            messageCount: trip.messageCount
+            lastUpdated: trip.lastUpdated,
+            userAuthorized: true
         });
 
         // Add location image from Unsplash API
@@ -392,8 +485,9 @@ router.get('/:chatId', async (req, res) => {
  * DELETE /api/chat/:chatId
  * 
  * Deletes a specific chat conversation.
+ * Uses optional authentication to verify ownership before deletion.
  */
-router.delete('/:chatId', async (req, res) => {
+router.delete('/:chatId', optionalAuth, async (req, res) => {
     console.log(TAG, 'DELETE /api/chat/:chatId - Chat deletion requested');
     
     try {
@@ -417,10 +511,10 @@ router.delete('/:chatId', async (req, res) => {
         const chatId = value;
         console.log(TAG, 'Attempting to delete chat ID:', chatId);
 
-        // Find chat index
-        const chatIndex = tripHistory.findIndex(c => c.id === chatId);
+        // Get trip details before deletion for response
+        const tripToDelete = await getTripById(chatId);
         
-        if (chatIndex === -1) {
+        if (!tripToDelete) {
             console.warn(TAG, 'Chat not found for deletion:', chatId);
             return res.status(404).json({
                 success: false,
@@ -430,37 +524,101 @@ router.delete('/:chatId', async (req, res) => {
             });
         }
 
-        // TODO: In production, verify user ownership before deletion
-        const chatToDelete = tripHistory[chatIndex];
-        console.log(TAG, 'Found chat to delete:', {
-            id: chatToDelete.id,
-            title: chatToDelete.title
+        // Verify user ownership before deletion
+        console.log(TAG, 'Verifying user ownership for trip:', {
+            tripId: tripToDelete.id,
+            tripUserId: tripToDelete.userId,
+            requestUserId: req.userId
         });
 
-        // Remove chat from history
-        tripHistory.splice(chatIndex, 1);
-        console.log(TAG, 'Chat deleted successfully. Remaining chats:', tripHistory.length);
+        // Check ownership based on authentication status
+        if (req.userId) {
+            // Authenticated user - must own the trip
+            if (tripToDelete.userId !== req.userId) {
+                console.warn(TAG, 'Access denied: User does not own this trip:', {
+                    tripId: chatId,
+                    tripOwner: tripToDelete.userId,
+                    requestingUser: req.userId
+                });
+                return res.status(403).json({
+                    success: false,
+                    error: 'Access Denied',
+                    message: 'You do not have permission to delete this trip',
+                    timestamp: new Date().toISOString()
+                });
+            }
+        } else {
+            // Non-authenticated user - can only delete trips without user_id (legacy trips)
+            if (tripToDelete.userId !== null) {
+                console.warn(TAG, 'Access denied: Non-authenticated user trying to delete user trip:', {
+                    tripId: chatId,
+                    tripOwner: tripToDelete.userId
+                });
+                return res.status(403).json({
+                    success: false,
+                    error: 'Access Denied',
+                    message: 'This trip belongs to a registered user and cannot be deleted without authentication',
+                    timestamp: new Date().toISOString()
+                });
+            }
+        }
 
-        // Prepare response
+        console.log(TAG, 'Ownership verification passed. Proceeding with deletion:', {
+            id: tripToDelete.id,
+            title: tripToDelete.title,
+            userAuthorized: true
+        });
+
+        // Prepare audit data
+        const auditData = {
+            ipAddress: req.ip || req.connection.remoteAddress,
+            userAgent: req.get('User-Agent')
+        };
+
+        // Soft delete trip from database with audit logging
+        const deletedTrip = await deleteTrip(chatId, req.userId, auditData);
+        
+        if (!deletedTrip) {
+            console.error(TAG, 'Failed to delete trip from database:', chatId);
+            return res.status(500).json({
+                success: false,
+                error: 'Database Error',
+                message: 'Failed to delete trip from database',
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        console.log(TAG, 'Chat soft deleted successfully from database:', chatId);
+
+        // Clean up associated files/data
+        await cleanupTripData(chatId, tripToDelete);
+
+        // Prepare detailed response with confirmation
         const response = {
             success: true,
             message: 'Chat deleted successfully',
             deletedTrip: {
-                id: chatToDelete.id,
-                title: chatToDelete.title
+                id: deletedTrip.id,
+                title: deletedTrip.title,
+                location: deletedTrip.location,
+                deletedAt: deletedTrip.deletedAt
+            },
+            audit: {
+                action: 'soft_delete',
+                userId: req.userId,
+                timestamp: new Date().toISOString(),
+                ipAddress: auditData.ipAddress
+            },
+            recovery: {
+                message: 'This chat has been moved to trash and can be recovered within 30 days',
+                contactSupport: 'Contact support if you need to recover this chat'
             },
             timestamp: new Date().toISOString()
         };
 
         // Send response
         res.status(200).json(response);
-        console.log(TAG, 'Deletion response sent successfully');
-
-        // TODO: In production, you might want to:
-        // 1. Soft delete instead of hard delete
-        // 2. Log deletion for audit purposes
-        // 3. Clean up associated files/data
-        // 4. Send deletion confirmation to user
+        console.log(TAG, 'Deletion response sent successfully with audit trail');
 
     } catch (error) {
         console.error(TAG, 'Error deleting chat:', error);
@@ -472,35 +630,6 @@ router.delete('/:chatId', async (req, res) => {
             timestamp: new Date().toISOString()
         });
     }
-});
-
-/**
- * GET /api/chat/status
- * 
- * Returns the status of the chat service
- */
-router.get('/status', (req, res) => {
-    console.log(TAG, 'GET /api/chat/status - Status check requested');
-    
-    res.status(200).json({
-        service: 'Trip API',
-        status: 'operational',
-        version: '1.0.0',
-        statistics: {
-            totalTrips: tripHistory.length,
-            oldestTrip: tripHistory.length > 0 ? 
-                Math.min(...tripHistory.map(c => new Date(c.lastUpdated).getTime())) : null,
-            newestTrip: tripHistory.length > 0 ? 
-                Math.max(...tripHistory.map(c => new Date(c.lastUpdated).getTime())) : null
-        },
-        endpoints: {
-            list: 'GET /api/chat',
-            get: 'GET /api/chat/:chatId',
-            delete: 'DELETE /api/chat/:chatId',
-            status: 'GET /api/chat/status'
-        },
-        timestamp: new Date().toISOString()
-    });
 });
 
 // ========================================
