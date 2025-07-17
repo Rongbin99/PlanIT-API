@@ -431,7 +431,7 @@ router.get('/:chatId', optionalAuth, async (req, res) => {
                 });
             }
         } else {
-            // Non-authenticated user - can only view trips without user_id (legacy trips)
+            // Non-authenticated user - can only view trips with user_id === null
             if (trip.userId !== null) {
                 console.warn(TAG, 'Access denied: Non-authenticated user trying to view user trip:', {
                     tripId: chatId,
@@ -548,7 +548,7 @@ router.delete('/:chatId', optionalAuth, async (req, res) => {
                 });
             }
         } else {
-            // Non-authenticated user - can only delete trips without user_id (legacy trips)
+            // Non-authenticated user - can only delete trips with user_id === null
             if (tripToDelete.userId !== null) {
                 console.warn(TAG, 'Access denied: Non-authenticated user trying to delete user trip:', {
                     tripId: chatId,

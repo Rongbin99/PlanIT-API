@@ -481,7 +481,7 @@ const getTrips = async (options = {}) => {
         
         // Add user filter
         if (userId) {
-            whereConditions.push(`user_id = $${params.length + 1}`);
+            whereConditions.push(`(user_id = $${params.length + 1} OR user_id IS NULL)`);
             params.push(userId);
         } else {
             // For non-authenticated users, only get trips without user_id (legacy trips)
