@@ -17,6 +17,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const rateLimit = require('express-rate-limit');
 const { 
     createUser, 
     getUserByEmail, 
@@ -186,6 +187,21 @@ const formatUserResponse = (user) => {
         updatedAt: user.updatedAt
     };
 };
+
+// ========================================
+// RATE LIMITERS
+// ========================================
+
+// Rate limiter for sensitive endpoints (e.g., password change)
+const passwordChangeLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // limit each IP to 5 requests per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many password change attempts from this IP, please try again later.'
+    }
+});
 
 // ========================================
 // ROUTES
@@ -565,7 +581,7 @@ router.put('/stats', authenticateToken, async (req, res) => {
  *
  * Changes the authenticated user's password
  */
-router.put('/password', authenticateToken, async (req, res) => {
+router.put('/password', authenticateToken, passwordChangeLimiter, async (req, res) => {
     console.log(TAG, 'PUT /api/user/password - Password change requested');
     try {
         // Validate request body
