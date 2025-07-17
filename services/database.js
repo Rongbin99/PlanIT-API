@@ -83,17 +83,69 @@ const createTables = async (client) => {
     try {
         console.log(TAG, 'Creating database tables...');
         
-        // Create trips table
+        // Create users table
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id UUID PRIMARY KEY,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                profile_image_url TEXT,
+                adventures_count INTEGER DEFAULT 0,
+                places_visited_count INTEGER DEFAULT 0,
+                member_since TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+            );
+        `);
+        
+        // Create index on email for login
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_users_email 
+            ON users(email);
+        `);
+        
+        // Create trips table with user_id reference
         await client.query(`
             CREATE TABLE IF NOT EXISTS trips (
                 id UUID PRIMARY KEY,
+                user_id UUID REFERENCES users(id) ON DELETE CASCADE,
                 title VARCHAR(255) NOT NULL,
                 location VARCHAR(255) NOT NULL,
                 last_updated TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
                 search_data JSONB,
+                deleted_at TIMESTAMP WITH TIME ZONE,
                 created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
                 updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
             );
+        `);
+        
+        // Add deleted_at column if it doesn't exist (for existing databases)
+        await client.query(`
+            ALTER TABLE trips 
+            ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
+        `);
+        
+        // Create audit_logs table for tracking deletions and other events
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                entity_type VARCHAR(50) NOT NULL,
+                entity_id UUID NOT NULL,
+                action VARCHAR(50) NOT NULL,
+                user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                old_data JSONB,
+                new_data JSONB,
+                ip_address INET,
+                user_agent TEXT,
+                timestamp TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+            );
+        `);
+        
+        // Create index on user_id for user's trips
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_trips_user_id 
+            ON trips(user_id);
         `);
         
         // Create index on last_updated for sorting
@@ -112,6 +164,28 @@ const createTables = async (client) => {
         await client.query(`
             CREATE INDEX IF NOT EXISTS idx_trips_title 
             ON trips(title);
+        `);
+        
+        // Create index on deleted_at for soft delete filtering
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_trips_deleted_at 
+            ON trips(deleted_at);
+        `);
+        
+        // Create indexes on audit_logs for efficient querying
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_entity 
+            ON audit_logs(entity_type, entity_id);
+        `);
+        
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_user 
+            ON audit_logs(user_id);
+        `);
+        
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp 
+            ON audit_logs(timestamp DESC);
         `);
         
         console.log(TAG, 'Database tables created successfully');
@@ -211,6 +285,173 @@ const seedDatabase = async () => {
 };
 
 // ========================================
+// USER OPERATIONS
+// ========================================
+
+/**
+ * Creates a new user
+ * @param {Object} userData - User data
+ * @returns {Promise<Object>} - Created user (without password)
+ */
+const createUser = async (userData) => {
+    try {
+        const { id, email, passwordHash, name, profileImageUrl } = userData;
+        
+        const result = await pool.query(
+            `INSERT INTO users (id, email, password_hash, name, profile_image_url) 
+             VALUES ($1, $2, $3, $4, $5) 
+             RETURNING id, email, name, profile_image_url, adventures_count, places_visited_count, member_since, created_at, updated_at`,
+            [id, email, passwordHash, name, profileImageUrl]
+        );
+        
+        console.log(TAG, 'User created successfully:', email);
+        return formatUserFromDB(result.rows[0]);
+        
+    } catch (error) {
+        if (error.code === '23505') { // Unique violation
+            throw new Error('Email already exists');
+        }
+        console.error(TAG, 'Error creating user:', error.message);
+        throw error;
+    }
+};
+
+/**
+ * Gets a user by email (for login)
+ * @param {string} email - User email
+ * @returns {Promise<Object|null>} - User data with password hash or null if not found
+ */
+const getUserByEmail = async (email) => {
+    try {
+        const result = await pool.query(
+            'SELECT * FROM users WHERE email = $1',
+            [email]
+        );
+        
+        if (result.rows.length === 0) {
+            return null;
+        }
+        
+        return result.rows[0];
+        
+    } catch (error) {
+        console.error(TAG, 'Error getting user by email:', error.message);
+        throw error;
+    }
+};
+
+/**
+ * Gets a user by ID
+ * @param {string} userId - User UUID
+ * @returns {Promise<Object|null>} - User data (without password) or null if not found
+ */
+const getUserById = async (userId) => {
+    try {
+        const result = await pool.query(
+            `SELECT id, email, name, profile_image_url, adventures_count, places_visited_count, member_since, created_at, updated_at 
+             FROM users WHERE id = $1`,
+            [userId]
+        );
+        
+        if (result.rows.length === 0) {
+            return null;
+        }
+        
+        return formatUserFromDB(result.rows[0]);
+        
+    } catch (error) {
+        console.error(TAG, 'Error getting user by ID:', error.message);
+        throw error;
+    }
+};
+
+/**
+ * Updates user profile
+ * @param {string} userId - User UUID
+ * @param {Object} updateData - Data to update
+ * @returns {Promise<Object|null>} - Updated user or null if not found
+ */
+const updateUser = async (userId, updateData) => {
+    try {
+        const { name, email, profileImageUrl } = updateData;
+        
+        const result = await pool.query(
+            `UPDATE users 
+             SET name = COALESCE($2, name),
+                 email = COALESCE($3, email),
+                 profile_image_url = COALESCE($4, profile_image_url),
+                 updated_at = NOW()
+             WHERE id = $1 
+             RETURNING id, email, name, profile_image_url, adventures_count, places_visited_count, member_since, created_at, updated_at`,
+            [userId, name, email, profileImageUrl]
+        );
+        
+        if (result.rows.length === 0) {
+            return null;
+        }
+        
+        console.log(TAG, 'User updated successfully:', userId);
+        return formatUserFromDB(result.rows[0]);
+        
+    } catch (error) {
+        console.error(TAG, 'Error updating user:', error.message);
+        throw error;
+    }
+};
+
+/**
+ * Updates user statistics (adventures count, places visited)
+ * @param {string} userId - User UUID
+ * @param {Object} stats - Statistics to update
+ * @returns {Promise<Object|null>} - Updated user or null if not found
+ */
+const updateUserStats = async (userId, stats) => {
+    try {
+        const { adventuresCount, placesVisitedCount } = stats;
+        
+        const result = await pool.query(
+            `UPDATE users 
+             SET adventures_count = COALESCE($2, adventures_count),
+                 places_visited_count = COALESCE($3, places_visited_count),
+                 updated_at = NOW()
+             WHERE id = $1 
+             RETURNING id, email, name, profile_image_url, adventures_count, places_visited_count, member_since, created_at, updated_at`,
+            [userId, adventuresCount, placesVisitedCount]
+        );
+        
+        if (result.rows.length === 0) {
+            return null;
+        }
+        
+        console.log(TAG, 'User stats updated successfully:', userId);
+        return formatUserFromDB(result.rows[0]);
+        
+    } catch (error) {
+        console.error(TAG, 'Error updating user stats:', error.message);
+        throw error;
+    }
+};
+
+/**
+ * Updates a user's password
+ * @param {string} userId - User UUID
+ * @param {string} newPasswordHash - New hashed password
+ * @returns {Promise<boolean>} - True if updated, false if not
+ */
+const updateUserPassword = async (userId, newPasswordHash) => {
+    try {
+        const result = await pool.query(
+            `UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1`,
+            [userId, newPasswordHash]
+        );
+        return result.rowCount > 0;
+    } catch (error) {
+        console.error(TAG, 'Error updating user password:', error.message);
+        throw error;
+    }
+};
+
+// ========================================
 // TRIP OPERATIONS
 // ========================================
 
@@ -226,23 +467,39 @@ const getTrips = async (options = {}) => {
             offset = 0,
             sortBy = 'last_updated',
             sortOrder = 'desc',
-            search = null
+            search = null,
+            userId = null
         } = options;
         
         let query = 'SELECT * FROM trips';
         let countQuery = 'SELECT COUNT(*) FROM trips';
         let params = [];
-        let whereClause = '';
+        let whereConditions = [];
+        
+        // Filter out soft-deleted trips
+        whereConditions.push('deleted_at IS NULL');
+        
+        // Add user filter
+        if (userId) {
+            whereConditions.push(`user_id = $${params.length + 1}`);
+            params.push(userId);
+        } else {
+            // For non-authenticated users, only get trips without user_id (legacy trips)
+            whereConditions.push('user_id IS NULL');
+        }
         
         // Add search filter
         if (search) {
-            whereClause = ` WHERE (
-                LOWER(title) LIKE LOWER($1) OR 
-                LOWER(location) LIKE LOWER($1) OR 
-                LOWER(search_data->>'searchQuery') LIKE LOWER($1)
-            )`;
+            whereConditions.push(`(
+                LOWER(title) LIKE LOWER($${params.length + 1}) OR 
+                LOWER(location) LIKE LOWER($${params.length + 1}) OR 
+                LOWER(search_data->>'searchQuery') LIKE LOWER($${params.length + 1})
+            )`);
             params.push(`%${search}%`);
         }
+        
+        // Build WHERE clause
+        const whereClause = whereConditions.length > 0 ? ` WHERE ${whereConditions.join(' AND ')}` : '';
         
         // Add WHERE clause to both queries
         query += whereClause;
@@ -254,12 +511,17 @@ const getTrips = async (options = {}) => {
         const order = sortOrder.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
         
         query += ` ORDER BY ${column} ${order} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+        
+        // Parameters for count query (exclude limit and offset)
+        const countParams = params.slice(0, params.length);
+        
+        // Add limit and offset for main query
         params.push(limit, offset);
         
         // Execute both queries
         const [tripsResult, countResult] = await Promise.all([
             pool.query(query, params),
-            pool.query(countQuery, search ? [params[0]] : [])
+            pool.query(countQuery, countParams)
         ]);
         
         const trips = tripsResult.rows.map(formatTripFromDB);
@@ -313,13 +575,13 @@ const getTripById = async (tripId) => {
  */
 const createTrip = async (tripData) => {
     try {
-        const { id, title, location, searchData } = tripData;
+        const { id, title, location, searchData, userId } = tripData;
         
         const result = await pool.query(
-            `INSERT INTO trips (id, title, location, search_data) 
-             VALUES ($1, $2, $3, $4) 
+            `INSERT INTO trips (id, user_id, title, location, search_data) 
+             VALUES ($1, $2, $3, $4, $5) 
              RETURNING *`,
-            [id, title, location, JSON.stringify(searchData)]
+            [id, userId, title, location, JSON.stringify(searchData)]
         );
         
         console.log(TAG, 'Trip created successfully:', id);
@@ -366,12 +628,84 @@ const updateTrip = async (tripId, updateData) => {
 };
 
 /**
- * Deletes a trip by ID
+ * Soft deletes a trip by ID (marks as deleted instead of removing)
  * @param {string} tripId - Trip UUID
+ * @param {string} userId - User ID performing the deletion (optional)
+ * @param {Object} auditData - Additional audit data (ip, user agent, etc.)
+ * @returns {Promise<Object|null>} - Deleted trip data or null if not found
+ */
+const deleteTrip = async (tripId, userId = null, auditData = {}) => {
+    try {
+        // First, get the trip data for audit logging
+        const tripResult = await pool.query(
+            'SELECT * FROM trips WHERE id = $1 AND deleted_at IS NULL',
+            [tripId]
+        );
+        
+        if (tripResult.rows.length === 0) {
+            return null;
+        }
+        
+        const tripData = tripResult.rows[0];
+        
+        // Soft delete the trip
+        const deleteResult = await pool.query(
+            `UPDATE trips 
+             SET deleted_at = NOW(), updated_at = NOW() 
+             WHERE id = $1 AND deleted_at IS NULL 
+             RETURNING id, title, location, deleted_at`,
+            [tripId]
+        );
+        
+        if (deleteResult.rows.length === 0) {
+            return null;
+        }
+        
+        const deletedTrip = deleteResult.rows[0];
+        
+        // Log the deletion for audit purposes
+        await logAuditEvent({
+            entityType: 'trip',
+            entityId: tripId,
+            action: 'soft_delete',
+            userId: userId,
+            oldData: tripData,
+            newData: { deleted_at: deletedTrip.deleted_at },
+            ipAddress: auditData.ipAddress,
+            userAgent: auditData.userAgent
+        });
+        
+        console.log(TAG, 'Trip soft deleted successfully:', tripId);
+        return formatTripFromDB(deletedTrip);
+        
+    } catch (error) {
+        console.error(TAG, 'Error soft deleting trip:', error.message);
+        throw error;
+    }
+};
+
+/**
+ * Permanently deletes a trip (hard delete - use with caution)
+ * @param {string} tripId - Trip UUID
+ * @param {string} userId - User ID performing the deletion
+ * @param {Object} auditData - Additional audit data
  * @returns {Promise<boolean>} - Success status
  */
-const deleteTrip = async (tripId) => {
+const hardDeleteTrip = async (tripId, userId = null, auditData = {}) => {
     try {
+        // Get the trip data for audit logging
+        const tripResult = await pool.query(
+            'SELECT * FROM trips WHERE id = $1',
+            [tripId]
+        );
+        
+        if (tripResult.rows.length === 0) {
+            return false;
+        }
+        
+        const tripData = tripResult.rows[0];
+        
+        // Hard delete the trip
         const result = await pool.query(
             'DELETE FROM trips WHERE id = $1 RETURNING id',
             [tripId]
@@ -381,12 +715,71 @@ const deleteTrip = async (tripId) => {
             return false;
         }
         
-        console.log(TAG, 'Trip deleted successfully:', tripId);
+        // Log the hard deletion for audit purposes
+        await logAuditEvent({
+            entityType: 'trip',
+            entityId: tripId,
+            action: 'hard_delete',
+            userId: userId,
+            oldData: tripData,
+            newData: null,
+            ipAddress: auditData.ipAddress,
+            userAgent: auditData.userAgent
+        });
+        
+        console.log(TAG, 'Trip hard deleted successfully:', tripId);
         return true;
         
     } catch (error) {
-        console.error(TAG, 'Error deleting trip:', error.message);
+        console.error(TAG, 'Error hard deleting trip:', error.message);
         throw error;
+    }
+};
+
+/**
+ * Logs an audit event to the audit_logs table
+ * @param {Object} eventData - Event data to log
+ * @returns {Promise<void>}
+ */
+const logAuditEvent = async (eventData) => {
+    try {
+        const {
+            entityType,
+            entityId,
+            action,
+            userId,
+            oldData,
+            newData,
+            ipAddress,
+            userAgent
+        } = eventData;
+        
+        await pool.query(
+            `INSERT INTO audit_logs 
+             (entity_type, entity_id, action, user_id, old_data, new_data, ip_address, user_agent) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [
+                entityType,
+                entityId,
+                action,
+                userId,
+                oldData ? JSON.stringify(oldData) : null,
+                newData ? JSON.stringify(newData) : null,
+                ipAddress || null,
+                userAgent || null
+            ]
+        );
+        
+        console.log(TAG, 'Audit event logged:', {
+            entityType,
+            entityId,
+            action,
+            userId
+        });
+        
+    } catch (error) {
+        console.error(TAG, 'Error logging audit event:', error.message);
+        // Don't throw error - audit logging failure shouldn't break main operation
     }
 };
 
@@ -402,12 +795,33 @@ const deleteTrip = async (tripId) => {
 const formatTripFromDB = (dbTrip) => {
     return {
         id: dbTrip.id,
+        userId: dbTrip.user_id,
         title: dbTrip.title,
         location: dbTrip.location,
         lastUpdated: dbTrip.last_updated,
         searchData: dbTrip.search_data,
+        deletedAt: dbTrip.deleted_at,
         createdAt: dbTrip.created_at,
         updatedAt: dbTrip.updated_at
+    };
+};
+
+/**
+ * Formats user data from database format to API format
+ * @param {Object} dbUser - User from database
+ * @returns {Object} - Formatted user (without password)
+ */
+const formatUserFromDB = (dbUser) => {
+    return {
+        id: dbUser.id,
+        email: dbUser.email,
+        name: dbUser.name,
+        profileImageUrl: dbUser.profile_image_url,
+        adventuresCount: dbUser.adventures_count,
+        placesVisitedCount: dbUser.places_visited_count,
+        memberSince: dbUser.member_since,
+        createdAt: dbUser.created_at,
+        updatedAt: dbUser.updated_at
     };
 };
 
@@ -496,15 +910,29 @@ module.exports = {
     seedDatabase,
     closeDatabase,
     
+    // User operations
+    createUser,
+    getUserByEmail,
+    getUserById,
+    updateUser,
+    updateUserStats,
+    updateUserPassword,
+    
     // Trip operations
     getTrips,
     getTripById,
     createTrip,
     updateTrip,
     deleteTrip,
+    hardDeleteTrip,
+    
+    // Audit operations
+    logAuditEvent,
     
     // Utility
     testConnection,
     getServiceStatus,
-    formatTripFromDB
+    formatTripFromDB,
+    formatUserFromDB,
+    pool
 }; 
