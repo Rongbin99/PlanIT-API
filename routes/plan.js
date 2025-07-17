@@ -63,8 +63,10 @@ const searchDataSchema = Joi.object({
             Joi.number().min(1).max(4),
             Joi.string()
         ).optional(),
-        specialOption: Joi.string().valid('adventure', 'casual', 'tourist', 'wander', 'date', 'family').optional()
-    }).required(),
+        specialOptions: Joi.array().items(
+            Joi.string().valid('adventure', 'casual', 'tourist', 'wander', 'date', 'family')
+        ).optional()
+    }).required().unknown(true),
     timestamp: Joi.string().isoDate().required()
 });
 
