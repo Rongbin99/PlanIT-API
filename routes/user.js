@@ -13,6 +13,9 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const Joi = require('joi');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { 
     createUser, 
@@ -35,6 +38,45 @@ const router = express.Router();
 // ========================================
 const TAG = "[UserRoutes]";
 const SALT_ROUNDS = 12;
+
+// ========================================
+// MULTER CONFIGURATION
+// ========================================
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Configure multer for image uploads
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadsDir);
+    },
+    filename: (req, file, cb) => {
+        // Generate unique filename with timestamp
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, `profile-${req.userId}-${uniqueSuffix}${path.extname(file.originalname)}`);
+    }
+});
+
+const fileFilter = (req, file, cb) => {
+    // Accept only image files
+    if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+    } else {
+        cb(new Error('Only image files are allowed'), false);
+    }
+};
+
+const upload = multer({
+    storage: storage,
+    fileFilter: fileFilter,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB limit
+    }
+});
 
 // ========================================
 // VALIDATION SCHEMAS
@@ -578,6 +620,63 @@ router.put('/password', authenticateToken, async (req, res) => {
         return res.status(500).json({
             success: false,
             message: 'Failed to change password. Please try again.'
+        });
+    }
+});
+
+/**
+ * POST /api/user/profile-image
+ *
+ * Uploads a profile image for the authenticated user
+ */
+router.post('/profile-image', authenticateToken, upload.single('image'), async (req, res) => {
+    console.log(TAG, 'POST /api/user/profile-image - Profile image upload requested');
+    
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: 'No image file provided'
+            });
+        }
+
+        // Generate the URL for the uploaded image
+        const imageUrl = `/uploads/${req.file.filename}`;
+        
+        // Update user's profile_image_url in database
+        const updatedUser = await updateUser(req.userId, {
+            profileImageUrl: imageUrl
+        });
+
+        if (!updatedUser) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        console.log(TAG, 'Profile image uploaded successfully for user:', req.userId);
+        
+        res.status(200).json({
+            success: true,
+            message: 'Profile image uploaded successfully',
+            imageUrl: imageUrl,
+            user: formatUserResponse(updatedUser)
+        });
+
+    } catch (error) {
+        console.error(TAG, 'Profile image upload error:', error.message);
+        
+        // Clean up uploaded file if there was an error
+        if (req.file) {
+            fs.unlink(req.file.path, (err) => {
+                if (err) console.error(TAG, 'Error deleting uploaded file:', err);
+            });
+        }
+        
+        res.status(500).json({
+            success: false,
+            message: 'Failed to upload profile image. Please try again.'
         });
     }
 });

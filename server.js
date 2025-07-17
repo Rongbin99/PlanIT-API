@@ -16,6 +16,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 require('dotenv').config();
+const path = require('path');
 
 const planRoutes = require('./routes/plan');
 const chatRoutes = require('./routes/chat');
@@ -236,6 +237,9 @@ function formatUptime(uptimeSeconds) {
 app.use('/api/plan', planRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/user', userRoutes);
+
+// Serve uploaded images
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Root endpoint
 app.get('/', (req, res) => {
