@@ -334,8 +334,8 @@ const testConnection = async () => {
                 message: 'Unsplash API connection successful',
                 resultsFound: response.response.total || 0,
                 rateLimit: {
-                    remaining: response.response.headers ? response.response.headers.get('x-ratelimit-remaining') : null,
-                    limit: response.response.headers ? response.response.headers.get('x-ratelimit-limit') : null
+                    remaining: response.originalResponse?.headers ? response.originalResponse.headers.get('x-ratelimit-remaining') : null,
+                    limit: response.originalResponse?.headers ? response.originalResponse.headers.get('x-ratelimit-limit') : null
                 }
             };
         } else {
