@@ -19,6 +19,7 @@ require('dotenv').config();
 
 const planRoutes = require('./routes/plan');
 const chatRoutes = require('./routes/chat');
+const userRoutes = require('./routes/user');
 const { initializeDatabase, seedDatabase, testConnection, closeDatabase } = require('./services/database');
 
 // ========================================
@@ -234,6 +235,7 @@ function formatUptime(uptimeSeconds) {
 // API routes
 app.use('/api/plan', planRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/user', userRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -244,7 +246,8 @@ app.get('/', (req, res) => {
         endpoints: {
             status: '/status',
             plan: '/api/plan',
-            chat: '/api/chat'
+            chat: '/api/chat',
+            user: '/api/user'
         },
         documentation: 'See README.md for API documentation'
     });
