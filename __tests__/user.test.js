@@ -185,4 +185,4 @@ describe('User API', () => {
       expect(res.body.success).toBe(true);
     });
   });
-}); 
+});

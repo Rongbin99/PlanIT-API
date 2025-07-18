@@ -42,4 +42,4 @@ describe('Chat API', () => {
       expect(res.body.error).toBe('Validation Error');
     });
   });
-}); 
+});
