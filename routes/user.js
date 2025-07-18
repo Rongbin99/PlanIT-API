@@ -17,6 +17,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const rateLimit = require('express-rate-limit');
 const { 
     createUser, 
     getUserByEmail, 
@@ -188,6 +189,98 @@ const formatUserResponse = (user) => {
 };
 
 // ========================================
+// RATE LIMITERS
+// ========================================
+
+// Rate limiter for sensitive endpoints (e.g., password change)
+const passwordChangeLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // limit each IP to 5 requests per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many password change attempts from this IP, please try again later.'
+    }
+});
+
+// Rate limiter for profile endpoint
+const profileLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 30, // limit each IP to 30 requests per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many profile requests from this IP, please try again later.'
+    }
+});
+
+// Rate limiter for profile update endpoint
+const profileUpdateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // limit each IP to 10 requests per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many profile update attempts from this IP, please try again later.'
+    }
+});
+
+// Rate limiter for stats update endpoint
+const statsUpdateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // limit each IP to 20 requests per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many stats update attempts from this IP, please try again later.'
+    }
+});
+
+// Rate limiter for profile image upload endpoint
+const profileImageLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // limit each IP to 5 requests per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many profile image upload attempts from this IP, please try again later.'
+    }
+});
+
+// Rate limiter for status endpoint
+const statusLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many status requests from this IP, please try again later.'
+    }
+});
+
+// Rate limiter for signup endpoint
+const signupLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // limit each IP to 5 signup attempts per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many signup attempts from this IP, please try again later.'
+    }
+});
+
+// Rate limiter for login endpoint
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // limit each IP to 10 login attempts per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many login attempts from this IP, please try again later.'
+    }
+});
+
+// ========================================
 // ROUTES
 // ========================================
 
@@ -196,7 +289,7 @@ const formatUserResponse = (user) => {
  * 
  * Creates a new user account
  */
-router.post('/signup', async (req, res) => {
+router.post('/signup', signupLimiter, async (req, res) => {
     console.log(TAG, 'POST /api/user/signup - User signup requested');
     
     try {
@@ -293,7 +386,7 @@ router.post('/signup', async (req, res) => {
  * 
  * Authenticates user and returns token
  */
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
     console.log(TAG, 'POST /api/user/login - User login requested');
     
     try {
@@ -389,7 +482,7 @@ router.post('/login', async (req, res) => {
  * 
  * Gets current user's profile
  */
-router.get('/profile', authenticateToken, async (req, res) => {
+router.get('/profile', profileLimiter, authenticateToken, async (req, res) => {
     console.log(TAG, 'GET /api/user/profile - Profile requested');
     
     try {
@@ -443,7 +536,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
  * 
  * Updates user profile
  */
-router.put('/profile', authenticateToken, async (req, res) => {
+router.put('/profile', profileUpdateLimiter, authenticateToken, async (req, res) => {
     console.log(TAG, 'PUT /api/user/profile - Profile update requested');
     
     try {
@@ -504,7 +597,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
  * 
  * Updates user statistics
  */
-router.put('/stats', authenticateToken, async (req, res) => {
+router.put('/stats', statsUpdateLimiter, authenticateToken, async (req, res) => {
     console.log(TAG, 'PUT /api/user/stats - Stats update requested');
     
     try {
@@ -565,7 +658,7 @@ router.put('/stats', authenticateToken, async (req, res) => {
  *
  * Changes the authenticated user's password
  */
-router.put('/password', authenticateToken, async (req, res) => {
+router.put('/password', passwordChangeLimiter, authenticateToken, async (req, res) => {
     console.log(TAG, 'PUT /api/user/password - Password change requested');
     try {
         // Validate request body
@@ -629,7 +722,7 @@ router.put('/password', authenticateToken, async (req, res) => {
  *
  * Uploads a profile image for the authenticated user
  */
-router.post('/profile-image', authenticateToken, upload.single('image'), async (req, res) => {
+router.post('/profile-image', profileImageLimiter, authenticateToken, upload.single('image'), async (req, res) => {
     console.log(TAG, 'POST /api/user/profile-image - Profile image upload requested');
     
     try {
@@ -669,9 +762,16 @@ router.post('/profile-image', authenticateToken, upload.single('image'), async (
         
         // Clean up uploaded file if there was an error
         if (req.file) {
-            fs.unlink(req.file.path, (err) => {
-                if (err) console.error(TAG, 'Error deleting uploaded file:', err);
-            });
+            // Sanitize and validate the file path before deleting
+            const uploadsRoot = path.resolve(__dirname, '../uploads');
+            const filePath = path.resolve(uploadsRoot, path.basename(req.file.path));
+            if (filePath.startsWith(uploadsRoot)) {
+                fs.unlink(filePath, (err) => {
+                    if (err) console.error(TAG, 'Error deleting uploaded file:', err);
+                });
+            } else {
+                console.error(TAG, 'Attempted to delete file outside uploads directory:', filePath);
+            }
         }
         
         res.status(500).json({
@@ -686,7 +786,7 @@ router.post('/profile-image', authenticateToken, upload.single('image'), async (
  * 
  * Returns the status of the user service
  */
-router.get('/status', async (req, res) => {
+router.get('/status', statusLimiter, async (req, res) => {
     console.log(TAG, 'GET /api/user/status - Status check requested');
     
     try {
