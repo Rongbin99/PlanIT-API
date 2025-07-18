@@ -764,7 +764,7 @@ router.post('/profile-image', profileImageLimiter, authenticateToken, upload.sin
         if (req.file) {
             // Sanitize and validate the file path before deleting
             const uploadsRoot = path.resolve(__dirname, '../uploads');
-            const filePath = path.resolve(uploadsRoot, path.basename(req.file.filename));
+            const filePath = path.resolve(uploadsRoot, path.basename(req.file.path));
             if (filePath.startsWith(uploadsRoot)) {
                 fs.unlink(filePath, (err) => {
                     if (err) console.error(TAG, 'Error deleting uploaded file:', err);

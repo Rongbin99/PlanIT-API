@@ -12,14 +12,11 @@
 // ========================================
 const express = require('express');
 const Joi = require('joi');
-const { v4: uuidv4 } = require('uuid');
 const rateLimit = require('express-rate-limit');
 const { addImagesToTrips } = require('../services/unsplash');
 const { 
     getTrips, 
     getTripById, 
-    createTrip, 
-    updateTrip, 
     deleteTrip,
     pool
 } = require('../services/database');
@@ -188,7 +185,7 @@ const logRequestDetails = (req, action) => {
  * Retrieves trip history with optional filtering, sorting, and pagination.
  * Uses optional authentication - shows user's trips if authenticated, public trips if not.
  */
-router.get('/', tripListLimiter, optionalAuth, async (req, res) => {
+router.get('/', optionalAuth, tripListLimiter, async (req, res) => {
     console.log(TAG, 'GET /api/chat - Trip history requested');
     
     try {
@@ -430,7 +427,7 @@ router.get('/status', statusLimiter, async (req, res) => {
  * Retrieves a specific trip planning conversation by ID.
  * Uses optional authentication to verify ownership of private trips.
  */
-router.get('/:chatId', tripGetLimiter, optionalAuth, async (req, res) => {
+router.get('/:chatId', optionalAuth, tripGetLimiter, async (req, res) => {
     console.log(TAG, 'GET /api/chat/:chatId - Specific chat requested');
     
     try {
@@ -547,7 +544,7 @@ router.get('/:chatId', tripGetLimiter, optionalAuth, async (req, res) => {
  * Deletes a specific chat conversation.
  * Uses optional authentication to verify ownership before deletion.
  */
-router.delete('/:chatId', tripDeleteLimiter, optionalAuth, async (req, res) => {
+router.delete('/:chatId', optionalAuth, tripDeleteLimiter, async (req, res) => {
     console.log(TAG, 'DELETE /api/chat/:chatId - Chat deletion requested');
     
     try {
