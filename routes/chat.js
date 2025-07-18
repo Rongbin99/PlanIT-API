@@ -13,6 +13,7 @@
 const express = require('express');
 const Joi = require('joi');
 const { v4: uuidv4 } = require('uuid');
+const rateLimit = require('express-rate-limit');
 const { addImagesToTrips } = require('../services/unsplash');
 const { 
     getTrips, 
@@ -33,6 +34,65 @@ const router = express.Router();
 // CONSTANTS
 // ========================================
 const TAG = "[ChatRoutes]";
+
+// ========================================
+// RATE LIMITERS
+// ========================================
+
+// Rate limiter for trip listing endpoint
+const tripListLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 50, // limit each IP to 50 requests per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many trip list requests from this IP, please try again later.'
+    }
+});
+
+// Rate limiter for individual trip retrieval endpoint
+const tripGetLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many trip retrieval requests from this IP, please try again later.'
+    }
+});
+
+// Rate limiter for trip deletion endpoint
+const tripDeleteLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // limit each IP to 20 deletion requests per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many trip deletion requests from this IP, please try again later.'
+    }
+});
+
+// Rate limiter for audit logs endpoint
+const auditLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // limit each IP to 20 audit requests per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many audit log requests from this IP, please try again later.'
+    }
+});
+
+// Rate limiter for status endpoint
+const statusLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 status requests per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many status requests from this IP, please try again later.'
+    }
+});
 
 // ========================================
 // VALIDATION SCHEMAS
@@ -128,7 +188,7 @@ const logRequestDetails = (req, action) => {
  * Retrieves trip history with optional filtering, sorting, and pagination.
  * Uses optional authentication - shows user's trips if authenticated, public trips if not.
  */
-router.get('/', optionalAuth, async (req, res) => {
+router.get('/', optionalAuth, tripListLimiter, async (req, res) => {
     console.log(TAG, 'GET /api/chat - Trip history requested');
     
     try {
@@ -214,7 +274,7 @@ router.get('/', optionalAuth, async (req, res) => {
  * 
  * Returns audit logs for chat operations (admin access recommended)
  */
-router.get('/audit', authenticateToken, async (req, res) => {
+router.get('/audit', auditLimiter, authenticateToken, async (req, res) => {
     try {
         console.log(TAG, 'GET /api/chat/audit - Audit logs requested by user:', req.userId);
         
@@ -318,7 +378,7 @@ router.get('/audit', authenticateToken, async (req, res) => {
  * 
  * Returns the status of the chat service
  */
-router.get('/status', async (req, res) => {
+router.get('/status', statusLimiter, async (req, res) => {
     console.log(TAG, 'GET /api/chat/status - Status check requested');
     
     try {
@@ -370,7 +430,7 @@ router.get('/status', async (req, res) => {
  * Retrieves a specific trip planning conversation by ID.
  * Uses optional authentication to verify ownership of private trips.
  */
-router.get('/:chatId', optionalAuth, async (req, res) => {
+router.get('/:chatId', optionalAuth, tripGetLimiter, async (req, res) => {
     console.log(TAG, 'GET /api/chat/:chatId - Specific chat requested');
     
     try {
@@ -487,7 +547,7 @@ router.get('/:chatId', optionalAuth, async (req, res) => {
  * Deletes a specific chat conversation.
  * Uses optional authentication to verify ownership before deletion.
  */
-router.delete('/:chatId', optionalAuth, async (req, res) => {
+router.delete('/:chatId', optionalAuth, tripDeleteLimiter, async (req, res) => {
     console.log(TAG, 'DELETE /api/chat/:chatId - Chat deletion requested');
     
     try {

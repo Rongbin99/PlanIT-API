@@ -482,7 +482,7 @@ router.post('/login', loginLimiter, async (req, res) => {
  * 
  * Gets current user's profile
  */
-router.get('/profile', authenticateToken, profileLimiter, async (req, res) => {
+router.get('/profile', profileLimiter, authenticateToken, async (req, res) => {
     console.log(TAG, 'GET /api/user/profile - Profile requested');
     
     try {
@@ -536,7 +536,7 @@ router.get('/profile', authenticateToken, profileLimiter, async (req, res) => {
  * 
  * Updates user profile
  */
-router.put('/profile', authenticateToken, profileUpdateLimiter, async (req, res) => {
+router.put('/profile', profileUpdateLimiter, authenticateToken, async (req, res) => {
     console.log(TAG, 'PUT /api/user/profile - Profile update requested');
     
     try {
@@ -597,7 +597,7 @@ router.put('/profile', authenticateToken, profileUpdateLimiter, async (req, res)
  * 
  * Updates user statistics
  */
-router.put('/stats', authenticateToken, statsUpdateLimiter, async (req, res) => {
+router.put('/stats', statsUpdateLimiter, authenticateToken, async (req, res) => {
     console.log(TAG, 'PUT /api/user/stats - Stats update requested');
     
     try {
@@ -658,7 +658,7 @@ router.put('/stats', authenticateToken, statsUpdateLimiter, async (req, res) => 
  *
  * Changes the authenticated user's password
  */
-router.put('/password', authenticateToken, passwordChangeLimiter, async (req, res) => {
+router.put('/password', passwordChangeLimiter, authenticateToken, async (req, res) => {
     console.log(TAG, 'PUT /api/user/password - Password change requested');
     try {
         // Validate request body
@@ -722,7 +722,7 @@ router.put('/password', authenticateToken, passwordChangeLimiter, async (req, re
  *
  * Uploads a profile image for the authenticated user
  */
-router.post('/profile-image', authenticateToken, profileImageLimiter, upload.single('image'), async (req, res) => {
+router.post('/profile-image', profileImageLimiter, authenticateToken, upload.single('image'), async (req, res) => {
     console.log(TAG, 'POST /api/user/profile-image - Profile image upload requested');
     
     try {
