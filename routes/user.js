@@ -258,6 +258,28 @@ const statusLimiter = rateLimit({
     }
 });
 
+// Rate limiter for signup endpoint
+const signupLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // limit each IP to 5 signup attempts per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many signup attempts from this IP, please try again later.'
+    }
+});
+
+// Rate limiter for login endpoint
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // limit each IP to 10 login attempts per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many login attempts from this IP, please try again later.'
+    }
+});
+
 // ========================================
 // ROUTES
 // ========================================
@@ -267,7 +289,7 @@ const statusLimiter = rateLimit({
  * 
  * Creates a new user account
  */
-router.post('/signup', async (req, res) => {
+router.post('/signup', signupLimiter, async (req, res) => {
     console.log(TAG, 'POST /api/user/signup - User signup requested');
     
     try {
@@ -364,7 +386,7 @@ router.post('/signup', async (req, res) => {
  * 
  * Authenticates user and returns token
  */
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
     console.log(TAG, 'POST /api/user/login - User login requested');
     
     try {
