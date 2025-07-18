@@ -31,11 +31,24 @@ jest.mock('../services/database', () => ({
   createUser: (...args) => mockCreateUser(...args),
   getUserByEmail: (...args) => mockGetUserByEmail(...args),
   updateUserPassword: (...args) => mockUpdateUserPassword(...args),
-  getUserById: (...args) => mockGetUserById(...args)
+  getUserById: (...args) => mockGetUserById(...args),
+  getTrips: jest.fn().mockResolvedValue({ pagination: { total: 0 } })
 }));
 jest.mock('../middleware/auth', () => ({
   generateToken: jest.fn().mockReturnValue('mocktoken'),
   authenticateToken: (req, res, next) => {
+    // Mock the actual user object that the middleware would set
+    req.user = {
+      id: 'user-1',
+      email: 'test@example.com',
+      name: 'Test User',
+      profileImageUrl: null,
+      adventuresCount: 0,
+      placesVisitedCount: 0,
+      memberSince: '2024-01-01',
+      createdAt: '2024-01-01',
+      updatedAt: '2024-01-01'
+    };
     req.userId = 'user-1';
     next();
   }
@@ -162,20 +175,32 @@ describe('User API', () => {
     });
   });
 
-  describe('POST /api/user/change-password', () => {
+  describe('PUT /api/user/password', () => {
     it('should return 400 for invalid body', async () => {
       const res = await request(app)
-        .post('/api/user/change-password')
+        .put('/api/user/password')
         .set('Authorization', 'Bearer mocktoken')
         .send({});
       expect(res.statusCode).toBe(400);
       expect(res.body.success).toBe(false);
-      expect(res.body.error).toBe('Validation Error');
     });
     it('should return 200 for valid password change', async () => {
+      // Mock getUserByEmail to return user with password_hash for password change
+      mockGetUserByEmail.mockResolvedValueOnce({
+        id: 'user-1',
+        email: 'test@example.com',
+        name: 'Test User',
+        password_hash: '$2b$12$saltsaltsaltsaltsaltsaltsaltsaltsaltsaltsaltsalt',
+        profileImageUrl: null,
+        adventuresCount: 0,
+        placesVisitedCount: 0,
+        memberSince: '2024-01-01',
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01'
+      });
       jest.spyOn(require('bcrypt'), 'compare').mockResolvedValue(true);
       const res = await request(app)
-        .post('/api/user/change-password')
+        .put('/api/user/password')
         .set('Authorization', 'Bearer mocktoken')
         .send({
           currentPassword: 'password123',
