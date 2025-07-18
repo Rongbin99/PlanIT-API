@@ -24,7 +24,7 @@ macOS/Linux (Bash):
 ## Execute the Rate Limit Test Scripts
 Using your JWT from above, run the rate limit testing scripts
 
-Windows (PowerShell): 
+Windows (PowerShell):
 
 ```powershell
 .\test-rate-limits.ps1 -Token "YOUR_JWT_TOKEN_HERE"
@@ -43,7 +43,7 @@ Upon success, you should see:
 - `200 OK` status for requests within the limit
 - `429 Too Many Requests` once the rate limit has been hit
 
-![NOTE]
+> [!INFO]
 > `Expected failure (401)` is expected. If you want to test for a login request with legitamite credentials, modify the `test-rate-limits` script email and password field.
 
 ### Rate Limit Thresholds
@@ -75,17 +75,10 @@ done
 ## Troubleshooting
 
 ### Common Issues
-1. **"Connection refused"**: Make sure your API server is running
-2. **"Invalid token"**: Get a fresh JWT token using the get-token script
-3. **"Rate limit not working"**: Check server logs for rate limit messages
-4. **"Script permission denied"**: Make scripts executable with `chmod +x *.sh` (macOS/Linux)
-
-### Server Logs
-Monitor your server console for rate limit messages:
-```
-[UserRoutes] Rate limit exceeded for IP: XXX.X.X.X
-[ChatRoutes] Rate limit exceeded for IP: XXX.X.X.X
-```
+1. **Connection refused**: Make sure your API server is running
+2. **Invalid token**: Get a fresh JWT token using the get-token script
+3. **Rate limit not working**: Check server logs for rate limit messages
+4. **Script permission denied**: Make scripts executable with `chmod +x *.sh` (macOS/Linux)
 
 ### Reset Rate Limits
 Rate limits reset after 15 minutes. To test immediately:
