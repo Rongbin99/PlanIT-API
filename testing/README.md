@@ -47,7 +47,7 @@ Upon success, you should see:
 - `429 Too Many Requests` once the rate limit has been hit
 
 > [!NOTE]
-> `Expected failure (401)` is expected. If you want to test for a login request with legitamite credentials, modify the `test-rate-limits` script email and password field.
+> `Expected failure (401)` is expected. If you want to test for a login request with legitimate credentials, modify the `test-rate-limits` script email and password field.
 
 ### Rate Limit Thresholds
 - **Profile Endpoint**: 30 requests per 15 minutes
