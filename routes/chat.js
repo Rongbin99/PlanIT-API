@@ -188,7 +188,7 @@ const logRequestDetails = (req, action) => {
  * Retrieves trip history with optional filtering, sorting, and pagination.
  * Uses optional authentication - shows user's trips if authenticated, public trips if not.
  */
-router.get('/', optionalAuth, tripListLimiter, async (req, res) => {
+router.get('/', tripListLimiter, optionalAuth, async (req, res) => {
     console.log(TAG, 'GET /api/chat - Trip history requested');
     
     try {
@@ -430,7 +430,7 @@ router.get('/status', statusLimiter, async (req, res) => {
  * Retrieves a specific trip planning conversation by ID.
  * Uses optional authentication to verify ownership of private trips.
  */
-router.get('/:chatId', optionalAuth, tripGetLimiter, async (req, res) => {
+router.get('/:chatId', tripGetLimiter, optionalAuth, async (req, res) => {
     console.log(TAG, 'GET /api/chat/:chatId - Specific chat requested');
     
     try {
@@ -547,7 +547,7 @@ router.get('/:chatId', optionalAuth, tripGetLimiter, async (req, res) => {
  * Deletes a specific chat conversation.
  * Uses optional authentication to verify ownership before deletion.
  */
-router.delete('/:chatId', optionalAuth, tripDeleteLimiter, async (req, res) => {
+router.delete('/:chatId', tripDeleteLimiter, optionalAuth, async (req, res) => {
     console.log(TAG, 'DELETE /api/chat/:chatId - Chat deletion requested');
     
     try {
