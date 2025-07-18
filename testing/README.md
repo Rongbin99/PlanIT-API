@@ -6,6 +6,9 @@ This quick guide is to walk you through how to use the Powershell (.ps1) and Bas
 - Valid user account credentials
 - PowerShell (Windows) or Bash (macOS/Linux)
 
+> [!TIP]
+> For macOS, run `chmod +x *.sh` before proceeding!
+
 ## Obtain your JWT
 Quickly enter your email and password to obtain the JWT associated with your USER_ID
 
