@@ -46,7 +46,7 @@ Upon success, you should see:
 - `200 OK` status for requests within the limit
 - `429 Too Many Requests` once the rate limit has been hit
 
-> [!INFO]
+> [!NOTE]
 > `Expected failure (401)` is expected. If you want to test for a login request with legitamite credentials, modify the `test-rate-limits` script email and password field.
 
 ### Rate Limit Thresholds
