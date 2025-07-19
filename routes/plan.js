@@ -16,6 +16,7 @@ const { v4: uuidv4 } = require('uuid');
 const openaiService = require('../services/openai');
 const { createTrip } = require('../services/database');
 const { optionalAuth } = require('../middleware/auth');
+const rateLimit = require('express-rate-limit');
 
 // ========================================
 // ROUTER SETUP
@@ -27,6 +28,22 @@ const router = express.Router();
 // ========================================
 
 const TAG = '[PlanRoutes]';
+
+// ========================================
+// RATE LIMITERS
+// ========================================
+
+// Rate limiter for plan trip endpoint
+const planTripLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 30, // limit each IP to 30 requests per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many plan trip attempts from this IP, please try again later.'
+    }
+});
+
 
 /**
  * Search data validation schema
@@ -335,7 +352,7 @@ const logRequestDetails = (req) => {
  * Processes the request through AI planning logic and returns recommendations.
  * Uses optional authentication - associates trip with user if authenticated.
  */
-router.post('/', optionalAuth, async (req, res) => {
+router.post('/', optionalAuth, planTripLimiter, async (req, res) => {
     const startTime = Date.now();
     console.log(TAG, 'POST /api/plan - Request received');
     
