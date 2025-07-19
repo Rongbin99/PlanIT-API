@@ -56,9 +56,9 @@ const storage = multer.diskStorage({
         cb(null, uploadsDir);
     },
     filename: (req, file, cb) => {
-        // Generate unique filename with timestamp
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, `profile-${req.userId}-${uniqueSuffix}${path.extname(file.originalname)}`);
+        // Generate consistent filename for user's profile image
+        const fileExtension = path.extname(file.originalname) || '.jpg';
+        cb(null, `profile-${req.userId}${fileExtension}`);
     }
 });
 
@@ -721,6 +721,7 @@ router.put('/password', passwordChangeLimiter, authenticateToken, async (req, re
  * POST /api/user/profile-image
  *
  * Uploads a profile image for the authenticated user
+ * Automatically deletes the previous profile image to save space
  */
 router.post('/profile-image', profileImageLimiter, authenticateToken, upload.single('image'), async (req, res) => {
     console.log(TAG, 'POST /api/user/profile-image - Profile image upload requested');
@@ -731,6 +732,15 @@ router.post('/profile-image', profileImageLimiter, authenticateToken, upload.sin
                 success: false,
                 message: 'No image file provided'
             });
+        }
+
+        // Get current user to check if they have an existing profile image
+        const currentUser = await getUserById(req.userId);
+        let oldImagePath = null;
+        
+        if (currentUser && currentUser.profileImageUrl) {
+            oldImagePath = currentUser.profileImageUrl;
+            console.log(TAG, 'User has existing profile image:', oldImagePath);
         }
 
         // Generate the URL for the uploaded image
@@ -746,6 +756,26 @@ router.post('/profile-image', profileImageLimiter, authenticateToken, upload.sin
                 success: false,
                 message: 'User not found'
             });
+        }
+
+        // Delete the old profile image file if it exists
+        if (oldImagePath) {
+            try {
+                const oldFilePath = path.join(__dirname, '..', oldImagePath);
+                // Sanitize and validate the file path before deleting
+                const uploadsRoot = path.resolve(__dirname, '../uploads');
+                const resolvedPath = path.resolve(oldFilePath);
+                
+                if (resolvedPath.startsWith(uploadsRoot) && fs.existsSync(resolvedPath)) {
+                    fs.unlinkSync(resolvedPath);
+                    console.log(TAG, 'Deleted old profile image:', oldImagePath);
+                } else {
+                    console.warn(TAG, 'Old profile image not found or outside uploads directory:', oldImagePath);
+                }
+            } catch (deleteError) {
+                console.error(TAG, 'Error deleting old profile image:', deleteError.message);
+                // Don't fail the upload if cleanup fails
+            }
         }
 
         console.log(TAG, 'Profile image uploaded successfully for user:', req.userId);
@@ -777,6 +807,81 @@ router.post('/profile-image', profileImageLimiter, authenticateToken, upload.sin
         res.status(500).json({
             success: false,
             message: 'Failed to upload profile image. Please try again.'
+        });
+    }
+});
+
+/**
+ * DELETE /api/user/profile-image
+ *
+ * Deletes the current user's profile image
+ */
+router.delete('/profile-image', profileImageLimiter, authenticateToken, async (req, res) => {
+    console.log(TAG, 'DELETE /api/user/profile-image - Profile image deletion requested');
+    
+    try {
+        // Get current user to check if they have an existing profile image
+        const currentUser = await getUserById(req.userId);
+        
+        if (!currentUser) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        if (!currentUser.profileImageUrl) {
+            return res.status(200).json({
+                success: true,
+                message: 'No profile image to delete',
+                user: formatUserResponse(currentUser)
+            });
+        }
+
+        // Delete the profile image file if it exists
+        const oldImagePath = currentUser.profileImageUrl;
+        try {
+            const oldFilePath = path.join(__dirname, '..', oldImagePath);
+            // Sanitize and validate the file path before deleting
+            const uploadsRoot = path.resolve(__dirname, '../uploads');
+            const resolvedPath = path.resolve(oldFilePath);
+            
+            if (resolvedPath.startsWith(uploadsRoot) && fs.existsSync(resolvedPath)) {
+                fs.unlinkSync(resolvedPath);
+                console.log(TAG, 'Deleted profile image file:', oldImagePath);
+            } else {
+                console.warn(TAG, 'Profile image file not found or outside uploads directory:', oldImagePath);
+            }
+        } catch (deleteError) {
+            console.error(TAG, 'Error deleting profile image file:', deleteError.message);
+            // Continue with database update even if file deletion fails
+        }
+
+        // Update user's profile_image_url to null in database
+        const updatedUser = await updateUser(req.userId, {
+            profileImageUrl: null
+        });
+
+        if (!updatedUser) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        console.log(TAG, 'Profile image deleted successfully for user:', req.userId);
+        
+        res.status(200).json({
+            success: true,
+            message: 'Profile image deleted successfully',
+            user: formatUserResponse(updatedUser)
+        });
+
+    } catch (error) {
+        console.error(TAG, 'Profile image deletion error:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete profile image. Please try again.'
         });
     }
 });
