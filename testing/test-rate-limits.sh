@@ -201,14 +201,75 @@ echo -e "${WHITE}Successful: $trip_success_count${NC}"
 echo -e "${WHITE}Rate Limited: $trip_rate_limited_count${NC}"
 echo ""
 
+print_info "Testing Plan Endpoint..."
+plan_success_count=0
+plan_rate_limited_count=0
+
+# Create temporary JSON file for plan request
+PLAN_TEMP_FILE=$(mktemp)
+cat > "$PLAN_TEMP_FILE" << EOF
+{
+    "searchData": {
+        "searchQuery": "Test query for rate limit testing",
+        "filters": {
+            "timeOfDay": ["morning"],
+            "environment": "indoor",
+            "planTransit": false,
+            "groupSize": "solo",
+            "planFood": false,
+            "priceRange": 2
+        },
+        "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")"
+    },
+    "userMessage": "Test message for rate limit testing"
+}
+EOF
+
+for ((i=1; i<=40; i++)); do
+    # Make the plan request
+    RESPONSE=$(curl -s -w "\n%{http_code}" \
+        -X POST \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $TOKEN" \
+        -d @"$PLAN_TEMP_FILE" \
+        "$BASE_URL/api/plan")
+    
+    # Extract response body and status code
+    RESPONSE_BODY=$(echo "$RESPONSE" | head -n -1)
+    HTTP_STATUS=$(echo "$RESPONSE" | tail -n 1)
+    
+    if [ "$HTTP_STATUS" -eq 200 ]; then
+        ((plan_success_count++))
+        print_success "Plan Request $i - Success"
+    elif [ "$HTTP_STATUS" -eq 429 ]; then
+        ((plan_rate_limited_count++))
+        print_error "Plan Request $i - Rate Limited"
+    else
+        print_warning "Plan Request $i - HTTP $HTTP_STATUS"
+    fi
+    
+    sleep 0.1
+done
+
+# Clean up temporary file
+rm "$PLAN_TEMP_FILE"
+
+echo ""
+print_results "Plan Endpoint Results:"
+echo -e "${WHITE}Successful: $plan_success_count${NC}"
+echo -e "${WHITE}Rate Limited: $plan_rate_limited_count${NC}"
+echo ""
+
 print_success "Rate Limit Testing Complete!"
 echo ""
 echo -e "${CYAN}Summary:${NC}"
 echo -e "${WHITE}Profile Endpoint: $success_count success, $rate_limited_count rate limited${NC}"
 echo -e "${WHITE}Login Endpoint: $login_success_count success, $login_rate_limited_count rate limited${NC}"
 echo -e "${WHITE}Trip Listing: $trip_success_count success, $trip_rate_limited_count rate limited${NC}"
+echo -e "${WHITE}Plan Endpoint: $plan_success_count success, $plan_rate_limited_count rate limited${NC}"
 echo ""
 echo -e "${YELLOW}Expected Rate Limits:${NC}"
 echo -e "${WHITE}Profile: 30 requests/15min${NC}"
 echo -e "${WHITE}Login: 10 requests/15min${NC}"
-echo -e "${WHITE}Trip Listing: 50 requests/15min${NC}" 
+echo -e "${WHITE}Trip Listing: 50 requests/15min${NC}"
+echo -e "${WHITE}Plan: 30 requests/15min${NC}" 

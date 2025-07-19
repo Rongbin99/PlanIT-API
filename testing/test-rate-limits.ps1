@@ -128,14 +128,69 @@ Write-Host "Successful: $tripSuccessCount"
 Write-Host "Rate Limited: $tripRateLimitedCount"
 Write-Host ""
 
+Write-Host "Testing Plan Endpoint..."
+$planSuccessCount = 0
+$planRateLimitedCount = 0
+
+# Create test data for plan request
+$planBody = @{
+    searchData = @{
+        searchQuery = "Test query for rate limit testing"
+        filters = @{
+            timeOfDay = @("morning")
+            environment = "indoor"
+            planTransit = $false
+            groupSize = "solo"
+            planFood = $false
+            priceRange = 2
+        }
+        timestamp = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+    }
+    userMessage = "Test message for rate limit testing"
+} | ConvertTo-Json -Depth 10
+
+for ($i = 1; $i -le 40; $i++) {
+    try {
+        $headers = @{
+            "Content-Type" = "application/json"
+            "Authorization" = "Bearer $Token"
+        }
+        
+        $response = Invoke-RestMethod -Uri "$BaseUrl/api/plan" -Headers $headers -Body $planBody -Method POST -TimeoutSec 10
+        
+        if ($response.success) {
+            $planSuccessCount++
+            Write-Host "Plan Request $i - Success"
+        }
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode -eq 429) {
+            $planRateLimitedCount++
+            Write-Host "Plan Request $i - Rate Limited"
+        } else {
+            Write-Host "Plan Request $i - Error: $($_.Exception.Message)"
+        }
+    }
+    
+    Start-Sleep -Milliseconds 100
+}
+
+Write-Host ""
+Write-Host "Plan Endpoint Results:"
+Write-Host "Successful: $planSuccessCount"
+Write-Host "Rate Limited: $planRateLimitedCount"
+Write-Host ""
+
 Write-Host "Rate Limit Testing Complete!"
 Write-Host ""
 Write-Host "Summary:"
 Write-Host "Profile Endpoint: $successCount success, $rateLimitedCount rate limited"
 Write-Host "Login Endpoint: $loginSuccessCount success, $loginRateLimitedCount rate limited"
 Write-Host "Trip Listing: $tripSuccessCount success, $tripRateLimitedCount rate limited"
+Write-Host "Plan Endpoint: $planSuccessCount success, $planRateLimitedCount rate limited"
 Write-Host ""
 Write-Host "Expected Rate Limits:"
 Write-Host "Profile: 30 requests/15min"
 Write-Host "Login: 10 requests/15min"
-Write-Host "Trip Listing: 50 requests/15min" 
+Write-Host "Trip Listing: 50 requests/15min"
+Write-Host "Plan: 30 requests/15min" 
