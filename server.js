@@ -183,9 +183,34 @@ app.get('/status', async (req, res) => {
             },
             api: {
                 endpoints: {
-                    plan: '/api/plan',
-                    chat: '/api/chat',
-                    status: '/status'
+                    // Core endpoints
+                    status: '/status',
+                    root: '/',
+                    uploads: '/uploads',
+                    
+                    // Plan endpoints
+                    plan_generate: 'POST /api/plan',
+                    plan_mapit: 'POST /api/plan/mapit',
+                    plan_status: 'GET /api/plan/status',
+                    plan_test_ai: 'GET /api/plan/test-ai',
+                    
+                    // Chat endpoints  
+                    chat_list: 'GET /api/chat',
+                    chat_audit: 'GET /api/chat/audit',
+                    chat_status: 'GET /api/chat/status',
+                    chat_get: 'GET /api/chat/:chatId',
+                    chat_delete: 'DELETE /api/chat/:chatId',
+                    
+                    // User endpoints
+                    user_signup: 'POST /api/user/signup',
+                    user_login: 'POST /api/user/login',
+                    user_profile_get: 'GET /api/user/profile',
+                    user_profile_update: 'PUT /api/user/profile',
+                    user_stats_update: 'PUT /api/user/stats',
+                    user_password_change: 'PUT /api/user/password',
+                    user_profile_image_upload: 'POST /api/user/profile-image',
+                    user_profile_image_delete: 'DELETE /api/user/profile-image',
+                    user_status: 'GET /api/user/status'
                 }
             },
             external_services: serviceChecks,
@@ -248,10 +273,34 @@ app.get('/', (req, res) => {
         message: 'PlanIT Backend API',
         author: 'Rongbin Gu (@rongbin99)',
         endpoints: {
-            status: '/status',
-            plan: '/api/plan',
-            chat: '/api/chat',
-            user: '/api/user'
+            // Core endpoints
+            status: 'GET /status',
+            root: 'GET /',
+            uploads: 'GET /uploads/:filename',
+            
+            // Plan endpoints - Trip planning and AI responses
+            plan_generate: 'POST /api/plan - Generate AI-powered trip plan',
+            plan_mapit: 'POST /api/plan/mapit - Generate Google Maps trip link',
+            plan_status: 'GET /api/plan/status - Plan service status',
+            plan_test_ai: 'GET /api/plan/test-ai - Test AI connection',
+            
+            // Chat endpoints - Trip history and management
+            chat_list: 'GET /api/chat - Get trip history (optional auth)',
+            chat_audit: 'GET /api/chat/audit - Get audit logs (auth required)',
+            chat_status: 'GET /api/chat/status - Chat service status',
+            chat_get: 'GET /api/chat/:chatId - Get specific trip (optional auth)',
+            chat_delete: 'DELETE /api/chat/:chatId - Delete trip (optional auth)',
+            
+            // User endpoints - Authentication and profile management
+            user_signup: 'POST /api/user/signup - User registration',
+            user_login: 'POST /api/user/login - User authentication',
+            user_profile_get: 'GET /api/user/profile - Get profile (auth required)',
+            user_profile_update: 'PUT /api/user/profile - Update profile (auth required)',
+            user_stats_update: 'PUT /api/user/stats - Update stats (auth required)',
+            user_password_change: 'PUT /api/user/password - Change password (auth required)',
+            user_profile_image_upload: 'POST /api/user/profile-image - Upload image (auth required)',
+            user_profile_image_delete: 'DELETE /api/user/profile-image - Delete image (auth required)',
+            user_status: 'GET /api/user/status - User service status'
         },
         documentation: 'See README.md for API documentation'
     });
