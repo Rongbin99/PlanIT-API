@@ -44,6 +44,17 @@ const planTripLimiter = rateLimit({
     }
 });
 
+// Rate limiter for MapIT endpoint
+const mapITLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // limit each IP to 10 requests per windowMs
+    message: {
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Too many MapIT attempts from this IP, please try again later.'
+    }
+});
+
 
 /**
  * Search data validation schema
@@ -433,6 +444,9 @@ router.post('/', optionalAuth, planTripLimiter, async (req, res) => {
         const response = {
             success: true,
             response: aiResult.content,
+            city: aiResult.city,
+            locations: aiResult.locations,
+            practicalTips: aiResult.practicalTips,
             chatId: chatId,
             title: title,
             location: location,
@@ -451,6 +465,7 @@ router.post('/', optionalAuth, planTripLimiter, async (req, res) => {
                 aiModel: aiResult.model,
                 aiSource: aiResult.source,
                 tokenUsage: aiResult.usage,
+                locationCount: aiResult.locations?.length || 0,
                 timestamp: new Date().toISOString()
             }
         };
@@ -468,13 +483,6 @@ router.post('/', optionalAuth, planTripLimiter, async (req, res) => {
         res.status(200).json(response);
         console.log(TAG, 'Response sent successfully');
 
-        // TODO: In production, you might want to:
-        // 1. Save the chat to a database
-        // 2. Integrate with actual AI/ML services
-        // 3. Implement rate limiting
-        // 4. Add user authentication
-        // 5. Log to external monitoring services
-
     } catch (error) {
         console.error(TAG, 'Error processing plan request:', error);
         
@@ -484,6 +492,64 @@ router.post('/', optionalAuth, planTripLimiter, async (req, res) => {
             message: 'Failed to process trip planning request',
             timestamp: new Date().toISOString(),
             chatId: null
+        });
+    }
+});
+
+/**
+ * POST /api/plan/mapit
+ * 
+ * Generates a Google Maps trip link from an array of locations
+ */
+router.post('/mapit', optionalAuth, mapITLimiter, async (req, res) => {
+    console.log(TAG, 'POST /api/plan/mapit - MapIT requested');
+    
+    try {
+        const { locations, travelMode = 'driving' } = req.body;
+        
+        if (!locations || !Array.isArray(locations) || locations.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation Error',
+                message: 'Locations array is required and must not be empty',
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        // Build Google Maps URL
+        let googleMapsUrl = 'https://www.google.com/maps/dir/';
+        
+        // Add each location to the URL
+        locations.forEach((location, index) => {
+            if (location.address) {
+                const encodedAddress = encodeURIComponent(location.address);
+                googleMapsUrl += encodedAddress;
+                if (index < locations.length - 1) {
+                    googleMapsUrl += '/';
+                }
+            }
+        });
+        
+        // Add travel mode parameter
+        googleMapsUrl += `?travelmode=${travelMode}`;
+        
+        console.log(TAG, 'Generated Google Maps URL:', googleMapsUrl);
+        
+        res.status(200).json({
+            success: true,
+            mapUrl: googleMapsUrl,
+            locationCount: locations.length,
+            travelMode: travelMode,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error(TAG, 'Error generating map link:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal Server Error',
+            message: 'Failed to generate map link',
+            timestamp: new Date().toISOString()
         });
     }
 });
