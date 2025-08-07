@@ -79,7 +79,10 @@ CRITICAL: You MUST respond with a valid JSON object in the following format:
       "estimatedTime": "How long to spend here (e.g., '2 hours', '30 minutes')",
       "time": "Start time for this location (e.g., '9:00 AM', '2:30 PM')",
       "priceRange": "Free|$|$$|$$$|$$$+",
-      "imageURL": "https://url_to_image",
+      "coordinates": {
+        "latitude": 43.6532,
+        "longitude": -79.3832
+      },
       "rating": 4.5,
       "phone": "Phone number or 'Not available'",
       "website": "Website URL or 'Not available'",
@@ -153,14 +156,15 @@ FOOD BUDGET REFERENCES:
 - Moderate ($20-$30 per person): Mid-range restaurants, popular local spots
 - Premium ($30-$50 per person): Upscale dining, specialty restaurants, fine casual
 - Luxury ($50+ per person): Fine dining, high-end establishments, chef-driven restaurants
+
 COMPREHENSIVE LOCATION DATA:
 - For each location, provide complete information as if you were a local travel guide
 - Include accurate ratings based on real reputation and quality (1.0-5.0 scale)
 - Provide real phone numbers when available, or "Not available" if unknown
 - Include official websites or "Not available" if none exists
-- Add realistic opening hours with current status (open_now: true/false)
-- Use high-quality images from reliable sources (Unsplash, travel sites, official photos)
-- Ensure all data represents actual, real locations with accurate details
+- Add realistic opening hours (e.g., "Monday: 9:00 AM - 6:00 PM", "Tuesday: 9:00 AM - 6:00 PM", "etc...")
+- Provide accurate GPS coordinates (latitude and longitude) for each location
+- Ensure all data represents actual, real locations with accurate details and coordinates
 
 RESPONSE FORMAT: Return ONLY the JSON object, no additional text or markdown formatting.`;
 };
@@ -172,7 +176,7 @@ RESPONSE FORMAT: Return ONLY the JSON object, no additional text or markdown for
  * @returns {string} - Formatted user prompt
  */
 const buildUserPrompt = (searchData, userMessage) => {
-    const { searchQuery, location, filters } = searchData;
+    const { searchQuery, location, filters, regenerationContext } = searchData;
     const {
         timeOfDay,
         environment,
@@ -188,6 +192,18 @@ const buildUserPrompt = (searchData, userMessage) => {
 Search Query: "${searchQuery}"
 User Message: "${userMessage}"
 `;
+
+    // Add regeneration context if this is a regeneration request
+    if (regenerationContext && regenerationContext.excludedLocation) {
+        prompt += `\n🔄 REGENERATION CONTEXT:
+This is a regeneration request to replace a specific location from a previous plan.
+Excluded Location: "${regenerationContext.excludedLocation}"
+Original Query: "${regenerationContext.originalQuery || searchQuery}"
+Original Chat ID: "${regenerationContext.originalChatId || 'unknown'}"
+
+IMPORTANT: Please provide alternative locations that are similar to the excluded location but different venues. Focus on the same category and style but different specific businesses or attractions.
+`;
+    }
 
     // Add location information if provided
     if (location && location.coords) {
@@ -265,6 +281,7 @@ IMPORTANT SEARCH REQUIREMENTS:
 - Use the GPS coordinates provided to find REAL, EXISTING locations and businesses
 - Search for current, operational establishments with accurate addresses
 - Include real business hours, contact information when relevant
+- Provide accurate GPS coordinates (latitude and longitude) for each recommended location
 - For transit: Provide actual transit routes, schedules, and timing for the specified time of day. IMPORTANTLY: Space out location start times by AT LEAST 20-30 minutes (local transit) or 45+ minutes (longer distances) to account for realistic travel time including walking, waiting, and transit duration
 - For food: Consider meal timing (breakfast: before 11am, lunch: 11am-2pm, dinner: 5pm-10pm, snacks: anytime)
 - Factor in current day of week and season for hours and availability
@@ -276,122 +293,141 @@ IMPORTANT SEARCH REQUIREMENTS:
 /**
  * Mock AI response generator (fallback when OpenAI is not available)
  * @param {Object} searchData - Search criteria
- * @returns {Object} - Mock response with Toronto trip data
+ * @returns {Object} - Mock response with Vancouver trip data
  */
 const generateMockResponse = (searchData) => {
     const { searchQuery, location, filters } = searchData;
     
-    console.log(TAG, 'Generating Toronto mock response for query:', searchQuery);
+    console.log(TAG, 'Generating Vancouver mock response for query:', searchQuery);
     
-    // Return the specific Toronto mock response data
+    // Return the specific Vancouver mock response data
     return {
-        city: "Toronto, ON, Canada",
+        city: "Vancouver, BC, Canada",
         locations: [
             {
-                name: "St. Lawrence Market South",
-                address: "93 Front St E, Toronto, ON M5E 1C3",
-                description: "Iconic downtown public market—grab a peameal bacon sandwich or wander artisan stalls in a historic setting.",
-                category: "attraction",
+                name: "Queen Elizabeth Park – Quarry Garden",
+                address: "4600 Cambie St, Vancouver, BC V5Y 2M4",
+                description: "A serene elevated garden offering calm city views, flowering gardens, and peaceful walking paths—perfect for unwinding after work.",
+                category: "activity",
                 estimatedTime: "45 minutes",
-                time: "5:00 PM",
-                priceRange: "$",
-                imageURL: "https://dynamic-media-cdn.tripadvisor.com/media/photo-o/0d/55/de/c5/outside-shot-of-st-lawrence.jpg?w=900&h=500&s=1",
-                rating: 4.7,
-                phone: "416‑392‑7219",
-                website: "https://www.stlawrencemarket.com",
+                time: "6:00 PM",
+                priceRange: "Free",
+                coordinates: {
+                    latitude: 49.2416,
+                    longitude: -123.1133
+                },
+                rating: 4.4,
+                phone: "Not available",
+                website: "https://vancouver.ca/parks-recreation-culture/queen-elizabeth-park.aspx",
                 opening_hours: {
                     open_now: true,
-                    weekday_text: [
-                        "Monday: Closed",
-                        "Tuesday: 8:00 AM - 6:00 PM",
-                        "Wednesday: 8:00 AM - 6:00 PM",
-                        "Thursday: 8:00 AM - 6:00 PM",
-                        "Friday: 8:00 AM - 6:00 PM",
-                        "Saturday: 8:00 AM - 6:00 PM",
-                        "Sunday: 9:00 AM - 5:00 PM"
-                    ]
+                    weekday_text: ["Monday–Sunday: 5:30 AM–10:00 PM"]
                 },
                 transitToNext: {
-                    type: "Streetcar",
+                    type: "Bus",
                     duration: "25 minutes",
-                    details: "Walk ~5 min to King St East & Market St; take 504 King streetcar west to Spadina Ave, walk to Queen St West"
+                    details: "Bus 33 from Cambie St at W 33rd Ave to Cambie St at King Edward Ave, then 5‑min walk"
                 }
             },
             {
-                name: "Graffiti Alley & Queen West stroll",
-                address: "Queen St W between Spadina Ave and Portland St, Toronto, ON",
-                description: "Explore colourful street‑art in Graffiti Alley then wander Queen West's indie shops and cafes—a local creative stretch.",
+                name: "Seawall stroll at Coal Harbour / Stanley Park",
+                address: "Coal Harbour Waterfront, Vancouver, BC",
+                description: "A gentle, atmospheric walk along the water's edge; you'll get reflections of city lights on the water and a peaceful evening breeze.",
                 category: "activity",
-                estimatedTime: "45 minutes",
-                time: "5:40 PM",
+                estimatedTime: "60 minutes",
+                time: "6:45 PM",
                 priceRange: "Free",
-                imageURL: "https://a.travel-assets.com/findyours-php/viewfinder/images/res70/517000/517221-graffiti-alley.jpg",
-                rating: 4.6,
+                coordinates: {
+                    latitude: 49.3060,
+                    longitude: -123.1420
+                },
+                rating: 4.8,
                 phone: "Not available",
                 website: "Not available",
                 opening_hours: {
                     open_now: true,
-                    weekday_text: [
-                        "Everyday: Open 24 hours"
-                    ]
+                    weekday_text: ["Monday–Sunday: Open 24 hours"]
                 },
                 transitToNext: {
-                    type: "Walk",
-                    duration: "10 minutes",
-                    details: "Stroll west along Queen St W toward Spadina Ave to The Cameron House"
+                    type: "Metro + Walk",
+                    duration: "30 minutes",
+                    details: "SkyTrain Canada Line from King Edward to Waterfront (Expo Line transfer), then 10‑min walk to Coal Harbour Seawall"
                 }
             },
             {
-                name: "The Cameron House (live music)",
-                address: "408 Queen St W, Toronto, ON M5V 2A7",
-                description: "Local live‑music bar with an intimate vibe and rotating local acts on early evening sets.",
+                name: "Forest‑bathe in a guided session at Lighthouse Park",
+                address: "Lighthouse Park, West Vancouver, BC",
+                description: "Join a calming forest‑bathing (shinrin‑yoku) session among ancient trees, guided to help release work stress and reconnect with nature.",
                 category: "activity",
-                estimatedTime: "1 hour",
-                time: "6:30 PM",
-                priceRange: "$$",
-                imageURL: "https://www.theglobeandmail.com/resizer/v2/BG33DUNZFNBP7ECEAROYGP3UNI.JPG?auth=2c041d66581c55f49dcafb1a7a5502e629a7b6c57bcf41d4cd0f591905aa7340&width=2200&quality=80",
-                rating: 4.5,
-                phone: "416‑535‑3345",
-                website: "http://www.thecameron.com",
+                estimatedTime: "60 minutes",
+                time: "7:30 PM",
+                priceRange: "$$ (guided session fees apply)",
+                coordinates: {
+                    latitude: 49.3394,
+                    longitude: -123.4160
+                },
+                rating: 4.7,
+                phone: "Not available (book through Talaysay Tours)",
+                website: "Not available",
                 opening_hours: {
                     open_now: true,
-                    weekday_text: [
-                        "Monday: 6:00 PM - 2:00 AM",
-                        "Tuesday to Saturday: 4:00 PM - 2:00 AM",
-                        "Sunday: 5:00 PM - 12:00 AM"
-                    ]
+                    weekday_text: ["Evening sessions – check tour provider"]
+                },
+                transitToNext: {
+                    type: "Bus + Ferry",
+                    duration: "45 minutes",
+                    details: "SeaBus from Waterfront to Lonsdale Quay (~15 min), then Bus 250 to Lighthouse Park (~20 min), plus walking"
+                }
+            },
+            {
+                name: "Dinner at a local favorite: The Dark Table",
+                address: "2692 Granville St, Vancouver, BC V6H 3H4",
+                description: "A unique sensory-diminished dining experience in semi-darkness—calm, immersive and perfect for gentle reflection over a moderate dinner.",
+                category: "restaurant",
+                estimatedTime: "75 minutes",
+                time: "8:45 PM",
+                priceRange: "$$ ($20–$30 per person)",
+                coordinates: {
+                    latitude: 49.2649,
+                    longitude: -123.1381
+                },
+                rating: 4.3,
+                phone: "+1 604‑737‑0440",
+                website: "https://thedarktable.ca",
+                opening_hours: {
+                    open_now: false,
+                    weekday_text: ["Tuesday–Saturday: 5:00 PM–9:00 PM"]
                 },
                 transitToNext: {
                     type: "Bus",
-                    duration: "20 minutes",
-                    details: "Walk ~5 min to Queen & Spadina Stn; take 121 Fort York‑Esplanade bus east to Gerrard St E & Jarvis, walk to Gallery Arcturus"
+                    duration: "30 minutes",
+                    details: "Bus 250 back to Lonsdale Quay, SeaBus to Waterfront, then Bus 22 to Granville St at 2nd Ave"
                 }
             },
             {
-                name: "Gallery Arcturus",
-                address: "80 Gerrard St E, Toronto, ON M5B 1G6",
-                description: "Free contemporary art gallery showing quirky exhibitions by local and Inuit artists.",
-                category: "attraction",
-                estimatedTime: "30 minutes",
-                time: "7:55 PM",
-                priceRange: "Free",
-                imageURL: "https://dynamic-media-cdn.tripadvisor.com/media/photo-o/15/c4/e2/50/80-gerrard-street-east.jpg?w=900&h=500&s=1",
-                rating: 4.4,
-                phone: "Not available",
-                website: "http://www.arcturus.ca",
+                name: "Quiet drink at a neighborhood gem – Odd Society Spirits (tasting room)",
+                address: "75 West 4th Ave, Vancouver, BC V5Y 1G9",
+                description: "An intimate local distillery tasting room in a relaxed, adult‑focused setting—great for a calm nightcap and authentic local flavour.",
+                category: "restaurant",
+                estimatedTime: "45 minutes",
+                time: "10:00 PM",
+                priceRange: "$$",
+                coordinates: {
+                    latitude: 49.2640,
+                    longitude: -123.1110
+                },
+                rating: 4.5,
+                phone: "+1 604‑255‑1815",
+                website: "https://oddsocietyspirits.com",
                 opening_hours: {
                     open_now: true,
-                    weekday_text: [
-                        "Monday: Closed",
-                        "Tuesday to Saturday: 12:00 PM - 6:00 PM",
-                        "Sunday: 12:00 PM - 5:00 PM"
-                    ]
+                    weekday_text: ["Tuesday–Saturday: 5:00 PM–10:00 PM"]
                 },
                 transitToNext: null
             }
         ],
-        summary: "Here's a relaxed, arts‑infused afternoon in downtown Toronto—start with a market bite, wander local street art and boutiques, catch live music and end with a hidden gallery exhibition. All selected as local gems rather than tourist traps.",
-        practicalTips: "St. Lawrence Market closes around 6 PM on weekdays—arrive no later than 5 PM. Streetcar lines can be busy at 5–6 PM—allow buffer. The Cameron House often starts music around 7 PM; check their schedule in advance. Gallery Arcturus closes at 6 PM on Saturdays but is open until 6 PM on weekdays—confirm current hours before going."
+        summary: "Here's a calming solo‑evening outing in Vancouver tailored just for you: start with peaceful garden views high above the city, meander along the Seawall with the reflected city lights, immerse in a forest‑bathing session in ancient west‑coast forest, enjoy a unique moderate‑budget dinner in sensory calm, and top it off with a relaxed, local‑flavor nightcap.",
+        practicalTips: "Allow 30 minutes buffer between activities for transit and walking. SkyTrain, SeaBus and buses run well into the evening, but check schedules for post‑9 PM services. Book forest‑bathing sessions in advance (via Talaysay Tours). For The Dark Table, reservations are strongly recommended—dining is in semi‑darkness and seating is limited. Dress in layers for changing temperatures, especially near water or forest. Finally, carry a small flashlight or phone light for any walking in dim settings (e.g. Lighthouse Park trail)."
     };
 };
 

@@ -280,7 +280,7 @@ app.get('/', (req, res) => {
             
             // Plan endpoints - Trip planning and AI responses
             plan_generate: 'POST /api/plan - Generate AI-powered trip plan',
-            plan_mapit: 'POST /api/plan/mapit - Generate Google Maps trip link',
+            plan_mapit: 'POST /api/plan/mapit - Generate map trip link (Google Maps/Apple Maps)',
             plan_status: 'GET /api/plan/status - Plan service status',
             plan_test_ai: 'GET /api/plan/test-ai - Test AI connection',
             

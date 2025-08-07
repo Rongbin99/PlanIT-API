@@ -95,7 +95,12 @@ const searchDataSchema = Joi.object({
             Joi.string().valid('adventure', 'casual', 'tourist', 'wander', 'date', 'family')
         ).optional()
     }).required().unknown(true),
-    timestamp: Joi.string().isoDate().required()
+    timestamp: Joi.string().isoDate().required(),
+    regenerationContext: Joi.object({
+        excludedLocation: Joi.string().optional(),
+        originalChatId: Joi.string().optional(),
+        originalQuery: Joi.string().optional()
+    }).optional()
 });
 
 /**
@@ -499,13 +504,13 @@ router.post('/', optionalAuth, planTripLimiter, async (req, res) => {
 /**
  * POST /api/plan/mapit
  * 
- * Generates a Google Maps trip link from an array of locations
+ * Generates a map trip link from an array of locations based on the user's preferred map provider
  */
 router.post('/mapit', optionalAuth, mapITLimiter, async (req, res) => {
     console.log(TAG, 'POST /api/plan/mapit - MapIT requested');
     
     try {
-        const { locations, travelMode = 'driving' } = req.body;
+        const { locations, travelMode = 'driving', mapProvider = 'google' } = req.body;
         
         if (!locations || !Array.isArray(locations) || locations.length === 0) {
             return res.status(400).json({
@@ -516,30 +521,63 @@ router.post('/mapit', optionalAuth, mapITLimiter, async (req, res) => {
             });
         }
 
-        // Build Google Maps URL
-        let googleMapsUrl = 'https://www.google.com/maps/dir/';
+        // Validate mapProvider
+        if (mapProvider && !['apple', 'google'].includes(mapProvider)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation Error',
+                message: 'mapProvider must be either "apple" or "google"',
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        let mapUrl;
         
-        // Add each location to the URL
-        locations.forEach((location, index) => {
-            if (location.address) {
-                const encodedAddress = encodeURIComponent(location.address);
-                googleMapsUrl += encodedAddress;
-                if (index < locations.length - 1) {
-                    googleMapsUrl += '/';
+        if (mapProvider === 'apple') {
+            // Generate Apple Maps URL
+            // Apple Maps doesn't support multi-stop routing like Google Maps
+            // We'll use the last location as destination and add waypoints
+            const lastLocation = locations[locations.length - 1];
+            const destination = encodeURIComponent(lastLocation.address);
+            
+            mapUrl = `http://maps.apple.com/?daddr=${destination}`;
+            
+            // Add waypoints if there are multiple locations
+            if (locations.length > 1) {
+                const waypoints = locations.slice(0, -1).map(location => 
+                    encodeURIComponent(location.address)
+                );
+                if (waypoints.length > 0) {
+                    mapUrl += `&saddr=${waypoints[0]}`;
                 }
             }
-        });
+        } else {
+            // Generate Google Maps URL (default)
+            mapUrl = 'https://www.google.com/maps/dir/';
+            
+            // Add each location to the URL
+            locations.forEach((location, index) => {
+                if (location.address) {
+                    const encodedAddress = encodeURIComponent(location.address);
+                    mapUrl += encodedAddress;
+                    if (index < locations.length - 1) {
+                        mapUrl += '/';
+                    }
+                }
+            });
+            
+            // Add travel mode parameter
+            mapUrl += `?travelmode=${travelMode}`;
+        }
         
-        // Add travel mode parameter
-        googleMapsUrl += `?travelmode=${travelMode}`;
-        
-        console.log(TAG, 'Generated Google Maps URL:', googleMapsUrl);
+        console.log(TAG, `Generated ${mapProvider} Maps URL:`, mapUrl);
         
         res.status(200).json({
             success: true,
-            mapUrl: googleMapsUrl,
+            mapUrl: mapUrl,
             locationCount: locations.length,
             travelMode: travelMode,
+            mapProvider: mapProvider,
             timestamp: new Date().toISOString()
         });
         
