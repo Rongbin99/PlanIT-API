@@ -349,7 +349,7 @@ const generateMockResponse = (searchData) => {
                     weekday_text: ["Monday–Sunday: Open 24 hours"]
                 },
                 transitToNext: {
-                    type: "Metro + Walk",
+                    type: "Metro",
                     duration: "30 minutes",
                     details: "SkyTrain Canada Line from King Edward to Waterfront (Expo Line transfer), then 10‑min walk to Coal Harbour Seawall"
                 }
@@ -361,20 +361,20 @@ const generateMockResponse = (searchData) => {
                 category: "activity",
                 estimatedTime: "60 minutes",
                 time: "7:30 PM",
-                priceRange: "$$ (guided session fees apply)",
+                priceRange: "$$",
                 coordinates: {
                     latitude: 49.3394,
                     longitude: -123.4160
                 },
                 rating: 4.7,
-                phone: "Not available (book through Talaysay Tours)",
+                phone: "Not available",
                 website: "Not available",
                 opening_hours: {
                     open_now: true,
                     weekday_text: ["Evening sessions – check tour provider"]
                 },
                 transitToNext: {
-                    type: "Bus + Ferry",
+                    type: "Ferry",
                     duration: "45 minutes",
                     details: "SeaBus from Waterfront to Lonsdale Quay (~15 min), then Bus 250 to Lighthouse Park (~20 min), plus walking"
                 }
@@ -386,7 +386,7 @@ const generateMockResponse = (searchData) => {
                 category: "restaurant",
                 estimatedTime: "75 minutes",
                 time: "8:45 PM",
-                priceRange: "$$ ($20–$30 per person)",
+                priceRange: "$$",
                 coordinates: {
                     latitude: 49.2649,
                     longitude: -123.1381
@@ -405,7 +405,7 @@ const generateMockResponse = (searchData) => {
                 }
             },
             {
-                name: "Quiet drink at a neighborhood gem – Odd Society Spirits (tasting room)",
+                name: "Odd Society Spirits",
                 address: "75 West 4th Ave, Vancouver, BC V5Y 1G9",
                 description: "An intimate local distillery tasting room in a relaxed, adult‑focused setting—great for a calm nightcap and authentic local flavour.",
                 category: "restaurant",
