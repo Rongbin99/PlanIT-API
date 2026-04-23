@@ -48,7 +48,7 @@ const initializeOpenAI = () => {
  * AI Model configuration
  */
 const AI_CONFIG = {
-    model: 'gpt-3.5-turbo', // Use GPT-3.5-turbo for cost efficiency
+    model: 'gpt-4o-mini', // Better quality/cost balance for structured travel planning
     maxTokens: 1000,
     temperature: 0.7, // Balanced creativity and consistency
     topP: 0.9,
@@ -604,7 +604,7 @@ const testConnection = async () => {
 
         // Simple test request
         const completion = await openai.chat.completions.create({
-            model: 'gpt-3.5-turbo',
+            model: 'gpt-4o-mini',
             messages: [{ role: 'user', content: 'Say "Hello from PlanIT!"' }],
             max_tokens: 20
         });
