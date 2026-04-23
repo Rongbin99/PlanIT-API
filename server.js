@@ -122,13 +122,25 @@ app.get('/status', async (req, res) => {
         // Check OpenAI API connectivity (if API key is configured)
         if (process.env.OPENAI_API_KEY) {
             try {
-                const { testConnection } = require('./services/openai');
-                serviceChecks.openai = await testConnection();
+                const { testConnection: testOpenAIConnection } = require('./services/openai');
+                serviceChecks.openai = await testOpenAIConnection();
             } catch (error) {
                 serviceChecks.openai = { status: 'error', message: error.message };
             }
         } else {
             serviceChecks.openai = { status: 'not_configured', message: 'API key not set' };
+        }
+
+        // Check Gemini API connectivity (if API key is configured)
+        if (process.env.GEMINI_API_KEY) {
+            try {
+                const { testConnection: testGeminiConnection } = require('./services/gemini');
+                serviceChecks.gemini = await testGeminiConnection();
+            } catch (error) {
+                serviceChecks.gemini = { status: 'error', message: error.message };
+            }
+        } else {
+            serviceChecks.gemini = { status: 'not_configured', message: 'API key not set' };
         }
         
         // Check Unsplash API connectivity (if API key is configured)

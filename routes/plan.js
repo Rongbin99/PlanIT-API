@@ -13,7 +13,6 @@
 const express = require('express');
 const Joi = require('joi');
 const { randomUUID: uuidv4 } = require('crypto');
-const openaiService = require('../services/openai');
 const { createTrip } = require('../services/database');
 const { optionalAuth } = require('../middleware/auth');
 const rateLimit = require('express-rate-limit');
@@ -28,6 +27,27 @@ const router = express.Router();
 // ========================================
 
 const TAG = '[PlanRoutes]';
+
+/**
+ * Resolves AI provider client from AI_SERVICE env variable.
+ * @returns {{ providerName: 'OpenAI'|'Gemini', client: Object }}
+ */
+const getAIProviderPair = () => {
+    const configuredService = process.env.AI_SERVICE || 'openai'; // default to OpenAI
+
+    switch (configuredService.toLowerCase()) {
+        case 'openai':
+            const openaiService = require('../services/openai');
+            return { providerName: 'OpenAI', client: openaiService };
+        case 'gemini': {
+            const geminiService = require('../services/gemini');
+            return { providerName: 'Gemini', client: geminiService };
+        }
+        default:
+            console.error(TAG, `Invalid AI_SERVICE "${configuredService}". Expected "openai" or "gemini"`);
+            return { providerName: 'unknown', client: null };
+    }
+};
 
 // ========================================
 // RATE LIMITERS
@@ -419,9 +439,10 @@ router.post('/', optionalAuth, planTripLimiter, async (req, res) => {
         const chatId = uuidv4();
         console.log(TAG, 'Generated chat ID:', chatId);
 
-        // Generate AI response using OpenAI service
-        console.log(TAG, 'Generating AI response via OpenAI');
-        const aiResult = await openaiService.generateTripPlan(searchData, userMessage);
+        // Generate AI response using selected provider
+        const { providerName, client } = getAIProviderPair();
+        console.log(TAG, `Generating AI response via ${providerName}`);
+        const aiResult = await client.generateTripPlan(searchData, userMessage);
 
         // Extract title and location from search data
         const title = searchData.searchQuery || 'Untitled Trip';
@@ -595,48 +616,62 @@ router.post('/mapit', optionalAuth, mapITLimiter, async (req, res) => {
 /**
  * GET /api/plan/status
  * 
- * Returns the status of the planning service including OpenAI status
+ * Returns the status of the planning service including active AI status
  */
 router.get('/status', (req, res) => {
     console.log(TAG, 'GET /api/plan/status - Status check requested');
-    
-    const openaiStatus = openaiService.getServiceStatus();
-    
-    res.status(200).json({
-        service: 'Plan API',
-        status: 'operational',
-        version: '1.0.0',
-        openai: openaiStatus,
-        endpoints: {
-            plan: 'POST /api/plan',
-            status: 'GET /api/plan/status',
-            test: 'GET /api/plan/test-ai'
-        },
-        timestamp: new Date().toISOString()
-    });
+
+    try {
+        const { providerName, client } = getAIProviderPair();
+        const aiStatus = client.getServiceStatus();
+        const activeProviderKey = providerName.toLowerCase();
+
+        res.status(200).json({
+            service: 'Plan API',
+            status: 'operational',
+            version: '1.0.0',
+            aiClient: activeProviderKey,
+            ai: aiStatus,
+            openai: activeProviderKey === 'openai' ? aiStatus : undefined,
+            endpoints: {
+                plan: 'POST /api/plan',
+                status: 'GET /api/plan/status',
+                test: 'GET /api/plan/test-ai'
+            },
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error(TAG, 'Plan status failed:', error.message);
+        res.status(500).json({
+            service: 'Plan API',
+            status: 'error',
+            message: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
 });
 
 /**
  * GET /api/plan/test-ai
  * 
- * Tests OpenAI connection and returns result
+ * Tests active AI provider connection and returns result
  */
 router.get('/test-ai', async (req, res) => {
-    console.log(TAG, 'GET /api/plan/test-ai - OpenAI test requested');
-    
     try {
-        const testResult = await openaiService.testConnection();
+        const { providerName, client } = getAIProviderPair();
+        console.log(TAG, `GET /api/plan/test-ai - ${providerName} test requested`);
+        const testResult = await client.testConnection();
         
         res.status(testResult.success ? 200 : 503).json({
-            service: 'OpenAI Test',
+            service: `${providerName} Test`,
             ...testResult,
             timestamp: new Date().toISOString()
         });
         
     } catch (error) {
-        console.error(TAG, 'OpenAI test failed:', error);
+        console.error(TAG, 'AI test failed:', error);
         res.status(500).json({
-            service: 'OpenAI Test',
+            service: 'AI Test',
             success: false,
             message: 'Test request failed',
             error: error.message,
