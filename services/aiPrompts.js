@@ -160,7 +160,7 @@ IMPORTANT: Please provide alternative locations that are similar to the excluded
     // Add location information if provided
     if (location && location.coords) {
         prompt += `\nLOCATION CONTEXT:\n`;
-        if (location.coords.latitude && location.coords.longitude) {
+        if (typeof location.coords.latitude === 'number' && typeof location.coords.longitude === 'number') {
             prompt += `🗺️ Coordinates: ${location.coords.latitude}, ${location.coords.longitude}\n`;
         }
         if (location.coords.accuracy) {
