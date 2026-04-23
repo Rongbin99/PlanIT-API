@@ -9,7 +9,7 @@ This [express.js](https://expressjs.com/) backend server responds to API callbac
 > [!NOTE]
 > **React Native Frontend**: The companion mobile app is available at [PlanIT Repository](https://github.com/Rongbin99/PlanIT). Refer to its README for setup instructions and API integration details.
 
-> [!WARN]
+> [!WARNING]
 > ***This is a Proof of Concept backend service for PlanIT and should not be used for PROD.***
 
 ## Instructions to Run
