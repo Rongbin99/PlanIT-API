@@ -12,7 +12,7 @@
 // ========================================
 const express = require('express');
 const Joi = require('joi');
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID: uuidv4 } = require('crypto');
 const openaiService = require('../services/openai');
 const { createTrip } = require('../services/database');
 const { optionalAuth } = require('../middleware/auth');
