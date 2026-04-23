@@ -639,14 +639,17 @@ router.get('/status', (req, res) => {
         }
         const aiStatus = client.getServiceStatus();
         const activeProviderKey = providerName.toLowerCase();
+        const isOperational = Boolean(aiStatus && aiStatus.initialized && aiStatus.hasApiKey);
+        const overallStatus = isOperational ? 'operational' : 'degraded';
+        const responseStatusCode = isOperational ? 200 : 503;
 
-        res.status(200).json({
+        res.status(responseStatusCode).json({
             service: 'Plan API',
-            status: 'operational',
+            status: overallStatus,
             version: '1.0.0',
             aiClient: activeProviderKey,
             ai: aiStatus,
-            openai: activeProviderKey === 'openai' ? aiStatus : undefined,
+            openai: activeProviderKey === 'openai' ? aiStatus : null,
             endpoints: {
                 plan: 'POST /api/plan',
                 status: 'GET /api/plan/status',
