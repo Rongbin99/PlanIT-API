@@ -18,6 +18,7 @@
   "author": "Rongbin Gu (@rongbin99)",
   "license": "MIT",
   "dependencies": {
+    "@google/genai": "^1.29.0",
     "@types/pg": "^8.20.0",
     "bcrypt": "^6.0.0",
     "compression": "^1.8.1",
