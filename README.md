@@ -43,7 +43,7 @@ npm install
 Clone the `env.example` file under /config and insert your API keys and configure the desired AI client
 
 ```
-AI_SERVICE=openai # default
+AI_SERVICE=openai // default
 
 OPENAI_API_KEY=
 GEMINI_API_KEY=
