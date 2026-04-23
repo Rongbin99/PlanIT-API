@@ -42,8 +42,8 @@ npm install
 
 Clone the `env.example` file under /config and insert your API keys and configure the desired AI client
 
-```
-// default to OpenAI
+```env
+# default to OpenAI
 AI_SERVICE=openai
 
 OPENAI_API_KEY=
