@@ -4,7 +4,7 @@
 ![GitHub last commit](https://img.shields.io/github/last-commit/Rongbin99/PlanIT-API)
 ![GitHub Release](https://img.shields.io/github/v/release/Rongbin99/PlanIT-API?style=flat)
 
-This [express.js](https://expressjs.com/) backend server responds to API callbacks from the React Native frontend and provides endpoints for trip planning and chat history management.
+This [express.js](https://expressjs.com/) backend server responds to API callbacks from the React Native frontend and provides endpoints for trip planning and chat history management. ***This is a Proof of Concept backend service for PlanIT and should not be used for PROD.***
 
 > [!NOTE]
 > **React Native Frontend**: The companion mobile app is available at [PlanIT Repository](https://github.com/Rongbin99/PlanIT). Refer to its README for setup instructions and API integration details.
@@ -37,17 +37,20 @@ Install the node dependencies.
 npm install
 ```
 
-Clone the `env.example` file under /config and insert your API keys
+Clone the `env.example` file under /config and insert your API keys and configure the desired AI client
 
 ```
+AI_SERVICE=openai # default
+
 OPENAI_API_KEY=
+GEMINI_API_KEY=
 UNSPLASH_API_KEY=
 ```
 
 Finally, run the server on your local machine.
 
 ```
-npm run dev
+npm start
 ```
 
 ## API Endpoints
