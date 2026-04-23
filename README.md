@@ -9,11 +9,14 @@ This [express.js](https://expressjs.com/) backend server responds to API callbac
 > [!NOTE]
 > **React Native Frontend**: The companion mobile app is available at [PlanIT Repository](https://github.com/Rongbin99/PlanIT). Refer to its README for setup instructions and API integration details.
 
+> [!IMPORTANT]
+> ***This is a Proof of Concept backend service for PlanIT and should not be used for PRODUCTION.***
+
 ## Instructions to Run
 
 ### Prerequisites
 
-- Node.js (v16.0.0 or higher)
+- Node.js (v20.0.0 or higher)
 - npm or yarn package manager
 - PostgreSQL (v12.0 or higher)
 
@@ -21,33 +24,37 @@ This [express.js](https://expressjs.com/) backend server responds to API callbac
 
 Clone this Git repository to your local machine.
 
-```
+```bash
 git clone https://github.com/Rongbin99/PlanIT-API
 ```
 
 Change directory to this project.
 
-```
+```bash
 cd PlanIT-API
 ```
 
 Install the node dependencies.
 
-```
+```bash
 npm install
 ```
 
-Clone the `env.example` file under /config and insert your API keys
+Clone the `env.example` file under /config and insert your API keys and configure the desired AI client
 
-```
+```env
+# default to OpenAI
+AI_SERVICE=openai
+
 OPENAI_API_KEY=
+GEMINI_API_KEY=
 UNSPLASH_API_KEY=
 ```
 
 Finally, run the server on your local machine.
 
-```
-npm run dev
+```bash
+npm start
 ```
 
 ## API Endpoints

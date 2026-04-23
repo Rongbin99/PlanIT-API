@@ -402,9 +402,9 @@ router.get('/status', statusLimiter, async (req, res) => {
         
     } catch (error) {
         console.error(TAG, 'Error getting database statistics:', error);
-        res.status(200).json({
+        res.status(503).json({
             service: 'Trip API',
-            status: 'operational',
+            status: 'degraded',
             version: '1.0.0',
             statistics: {
                 totalTrips: 'Unable to fetch',
