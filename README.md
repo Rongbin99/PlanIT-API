@@ -24,26 +24,26 @@ This [express.js](https://expressjs.com/) backend server responds to API callbac
 
 Clone this Git repository to your local machine.
 
-```
+```bash
 git clone https://github.com/Rongbin99/PlanIT-API
 ```
 
 Change directory to this project.
 
-```
+```bash
 cd PlanIT-API
 ```
 
 Install the node dependencies.
 
-```
+```bash
 npm install
 ```
 
 Clone the `env.example` file under /config and insert your API keys and configure the desired AI client
 
-```
-AI_SERVICE=openai // default
+```bash
+AI_SERVICE=openai # default
 
 OPENAI_API_KEY=
 GEMINI_API_KEY=
@@ -52,7 +52,7 @@ UNSPLASH_API_KEY=
 
 Finally, run the server on your local machine.
 
-```
+```bash
 npm start
 ```
 
