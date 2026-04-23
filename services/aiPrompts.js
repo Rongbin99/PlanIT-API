@@ -210,18 +210,22 @@ IMPORTANT: Please provide alternative locations that are similar to the excluded
 
     // Special options - include discovery preference guidance
     if (specialOption && specialOption !== 'auto') {
+        const specialKey = String(specialOption).toLowerCase();
         const specialDescriptions = {
             casual: 'Casual, relaxed atmosphere with local favorites',
             tourist: 'Popular tourist attractions and must-see spots - Include well-known landmarks',
             wander: 'Off-the-beaten-path, hidden gems and local secrets',
             date: 'Romantic, intimate settings with local charm',
-            family: 'Family-friendly activities for all ages, including local community spots'
+            family: 'Family-friendly activities for all ages, including local community spots',
+            adventure: 'Active, adventurous experiences with exciting local activities'
         };
-        
-        if (specialOption.toLowerCase() === 'tourist') {
-            prompt += `✨ Special Focus: ${specialDescriptions[specialOption]} - TOURIST MODE: Include mainstream attractions\n`;
+
+        const specialDescription = specialDescriptions[specialKey] || 'Balanced exploration tailored to your preferences';
+
+        if (specialKey === 'tourist') {
+            prompt += `✨ Special Focus: ${specialDescription} - TOURIST MODE: Include mainstream attractions\n`;
         } else {
-            prompt += `✨ Special Focus: ${specialDescriptions[specialOption]} - LOCAL MODE: Focus on neighborhood gems\n`;
+            prompt += `✨ Special Focus: ${specialDescription} - LOCAL MODE: Focus on neighborhood gems\n`;
         }
     } else {
         prompt += `✨ Discovery Mode: LOCAL - Focus on hidden gems, neighborhood favorites, and authentic local experiences\n`;

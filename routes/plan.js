@@ -31,7 +31,7 @@ const TAG = '[PlanRoutes]';
 
 /**
  * Resolves AI provider client from AI_SERVICE env variable.
- * @returns {{ providerName: 'OpenAI'|'Gemini', client: Object }}
+ * @returns {{ providerName: 'OpenAI'|'Gemini'|'unknown', client: Object|null }}
  */
 const getAIProviderPair = () => {
     const configuredService = process.env.AI_SERVICE || 'openai'; // default to OpenAI

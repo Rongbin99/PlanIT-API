@@ -16,7 +16,7 @@ This [express.js](https://expressjs.com/) backend server responds to API callbac
 
 ### Prerequisites
 
-- Node.js (v16.0.0 or higher)
+- Node.js (v20.0.0 or higher)
 - npm or yarn package manager
 - PostgreSQL (v12.0 or higher)
 
@@ -42,8 +42,9 @@ npm install
 
 Clone the `env.example` file under /config and insert your API keys and configure the desired AI client
 
-```bash
-AI_SERVICE=openai # default
+```
+// default to OpenAI
+AI_SERVICE=openai
 
 OPENAI_API_KEY=
 GEMINI_API_KEY=
