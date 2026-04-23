@@ -97,8 +97,40 @@ const buildFallbackTripPlanResponse = ({
     return response;
 };
 
+/**
+ * Sends a standard 503 response when AI client is unavailable.
+ *
+ * @param {Object|null} client
+ * @param {Object} res
+ * @param {string} providerName
+ * @param {Object} [responseBody]
+ * @param {string} [logTag]
+ * @returns {boolean}
+ */
+const ensureAIClientAvailable = (
+    client,
+    res,
+    providerName,
+    responseBody = {},
+    logTag = '[AIHelpers]'
+) => {
+    if (client) {
+        return true;
+    }
+
+    console.error(logTag, `AI client unavailable for provider "${providerName}"`);
+    res.status(503).json({
+        ...responseBody,
+        message: responseBody.message || 'AI provider is not configured correctly',
+        timestamp: new Date().toISOString()
+    });
+
+    return false;
+};
+
 module.exports = {
     parseModelJson,
     normalizeUsage,
-    buildFallbackTripPlanResponse
+    buildFallbackTripPlanResponse,
+    ensureAIClientAvailable
 };

@@ -102,13 +102,14 @@ describe('Plan API', () => {
       expect(openaiMock.generateTripPlan).not.toHaveBeenCalled();
     });
 
-    it('should return 500 when AI_SERVICE is invalid', async () => {
+    it('should return 503 when AI_SERVICE is invalid', async () => {
       const { app } = setupPlanApp({ aiService: 'invalid-provider' });
       const res = await request(app).post('/api/plan').send(validBody);
 
-      expect(res.statusCode).toBe(500);
+      expect(res.statusCode).toBe(503);
       expect(res.body.success).toBe(false);
-      expect(res.body.error).toBe('Internal Server Error');
+      expect(res.body.error).toBe('Service Unavailable');
+      expect(res.body.message).toBe('AI provider is not configured correctly');
     });
   });
 
@@ -136,14 +137,15 @@ describe('Plan API', () => {
       expect(res.body.openai).toBeUndefined();
     });
 
-    it('should return 500 when AI_SERVICE is invalid', async () => {
+    it('should return 503 when AI_SERVICE is invalid', async () => {
       const { app } = setupPlanApp({ aiService: 'invalid-provider' });
       const res = await request(app).get('/api/plan/status');
 
-      expect(res.statusCode).toBe(500);
+      expect(res.statusCode).toBe(503);
       expect(res.body.service).toBe('Plan API');
-      expect(res.body.status).toBe('error');
-      expect(res.body.message).toBeDefined();
+      expect(res.body.status).toBe('degraded');
+      expect(res.body.aiClient).toBe('unknown');
+      expect(res.body.message).toBe('AI provider is not configured correctly');
     });
   });
 
@@ -168,13 +170,14 @@ describe('Plan API', () => {
       expect(res.body.timestamp).toBeDefined();
     });
 
-    it('should return 500 when AI_SERVICE is invalid', async () => {
+    it('should return 503 when AI_SERVICE is invalid', async () => {
       const { app } = setupPlanApp({ aiService: 'invalid-provider' });
       const res = await request(app).get('/api/plan/test-ai');
 
-      expect(res.statusCode).toBe(500);
+      expect(res.statusCode).toBe(503);
       expect(res.body.service).toBe('AI Test');
       expect(res.body.success).toBe(false);
+      expect(res.body.message).toBe('AI provider is not configured correctly');
       expect(res.body.timestamp).toBeDefined();
     });
   });

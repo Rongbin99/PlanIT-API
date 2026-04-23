@@ -16,6 +16,7 @@ const { randomUUID: uuidv4 } = require('crypto');
 const { createTrip } = require('../services/database');
 const { optionalAuth } = require('../middleware/auth');
 const rateLimit = require('express-rate-limit');
+const { ensureAIClientAvailable } = require('../services/aiHelpers');
 
 // ========================================
 // ROUTER SETUP
@@ -441,6 +442,12 @@ router.post('/', optionalAuth, planTripLimiter, async (req, res) => {
 
         // Generate AI response using selected provider
         const { providerName, client } = getAIProviderPair();
+        if (!ensureAIClientAvailable(client, res, providerName, {
+            success: false,
+            error: 'Service Unavailable'
+        }, TAG)) {
+            return;
+        }
         console.log(TAG, `Generating AI response via ${providerName}`);
         const aiResult = await client.generateTripPlan(searchData, userMessage);
 
@@ -623,6 +630,13 @@ router.get('/status', (req, res) => {
 
     try {
         const { providerName, client } = getAIProviderPair();
+        if (!ensureAIClientAvailable(client, res, providerName, {
+            service: 'Plan API',
+            status: 'degraded',
+            aiClient: 'unknown'
+        }, TAG)) {
+            return;
+        }
         const aiStatus = client.getServiceStatus();
         const activeProviderKey = providerName.toLowerCase();
 
@@ -659,6 +673,12 @@ router.get('/status', (req, res) => {
 router.get('/test-ai', async (req, res) => {
     try {
         const { providerName, client } = getAIProviderPair();
+        if (!ensureAIClientAvailable(client, res, providerName, {
+            service: 'AI Test',
+            success: false
+        }, TAG)) {
+            return;
+        }
         console.log(TAG, `GET /api/plan/test-ai - ${providerName} test requested`);
         const testResult = await client.testConnection();
         
